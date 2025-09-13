@@ -102,7 +102,7 @@ jobs:
             if [ ! -f .env ]; then echo "⚠️ .env topilmadi (serverda bo‘lishi kerak)"; fi
 
             pm2 delete video_d_bot || true
-            pm2 start npm --name video_d_bot -- run start
+            pm2 start node --name video_d_bot -- bot/index.js
             pm2 save
 
       - name: Telegram Notify (Success)
