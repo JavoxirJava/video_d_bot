@@ -15,7 +15,7 @@ jobs:
         run: |
           curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
             -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
-            -d text="${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            -d text="Depliy jarayoni boshlandi..." \
             -d parse_mode=Markdown
           curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendSticker \
             -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
@@ -101,8 +101,8 @@ jobs:
 
             if [ ! -f .env ]; then echo "⚠️ .env topilmadi (serverda bo‘lishi kerak)"; fi
 
-            pm2 delete ming-chinor || true
-            pm2 start npm --name ming-chinor -- run start
+            pm2 delete video_d_bot || true
+            pm2 start npm --name video_d_bot -- run start
             pm2 save
 
       - name: Telegram Notify (Success)
