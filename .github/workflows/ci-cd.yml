@@ -68,7 +68,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: '22'
           script: |
-            mkdir -p /chromeuser/video_d_bot2
+            mkdir -p $HOME/video_d_bot2
 
       - name: 📤 Tarballni serverga yuborish (SCP)
         if: github.ref == 'refs/heads/master'
@@ -79,7 +79,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: '22'
           source: "release.tar.gz"          # <-- workspace ichidagi fayl
-          target: "/chromeuser/video_d_bot2"
+          target: "$HOME/video_d_bot2"
           overwrite: true                   # eski release.tar.gz ustidan yozish
 
       - name: 🔁 Serverda extract + PM2 restart
@@ -91,7 +91,7 @@ jobs:
           port: '22'
           script: |
             set -e
-            cd /chromeuser/video_d_bot2
+            cd $HOME/video_d_bot2
 
             tar xzf release.tar.gz
             rm -f release.tar.gz
