@@ -18,6 +18,7 @@ bot.use(ensureSubscribed);
 
 // Callback handler for YouTube format buttons
 bot.on('callback_query', async (ctx) => {
+    console.log('Callback query:', ctx.callbackQuery);
     const data = ctx.callbackQuery?.data || '';
     try {
         if (data.startsWith('yt|')) return await handleYoutubeChoice(ctx, data);
@@ -39,6 +40,7 @@ bot.on('text', async (ctx) => {
 
     for (const url of urls) {
         const p = detectPlatform(url);
+        console.log('Platform:', p);
         try {
             if (p === 'youtube') await askYoutubeFormat(ctx, url);
             else if (p === 'instagram') await handleInstagram(ctx, url, { tier: 'free' });

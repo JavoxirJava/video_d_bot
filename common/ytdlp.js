@@ -1,4 +1,5 @@
-import { execFile, spawn } from 'child_process';
+import { execFile } from 'child_process';
+import { log } from 'console';
 
 
 const YTDLP = process.env.YTDLP_PATH || '/usr/local/bin/yt-dlp';
@@ -40,6 +41,7 @@ export function execYtDlp(args, opts = {}) {
 
 export async function ytInfo(url) {
     const { stdout } = await execYtDlp(['-J', ...ytCookieArgs(), '--add-header', 'Referer: https://www.youtube.com/', url]);
+    log('YT-DLP INFO:', stdout);
     return JSON.parse(stdout);
 }
 
@@ -52,10 +54,12 @@ export async function ytDownloadByItag(url, itag, outPath) {
         '-o', outPath,
         '--postprocessor-args', 'ffmpeg:-movflags +faststart',
     ];
+    log('Downloading with yt-dlp:', YTDLP, args.join(' '), url);
     await execYtDlp([...args, url]);
 }
 
 export async function genericToMp4(url, outPath, platform = 'instagram') {
+    log('igCookieArgs:', igCookieArgs());
     const args = [
         ...(platform === 'instagram' ? igCookieArgs() : []),
         '--add-header', 'Accept-Language: en-US,en;q=0.9',

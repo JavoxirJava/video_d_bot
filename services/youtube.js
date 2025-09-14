@@ -26,9 +26,7 @@ export async function askYoutubeFormat(ctx, url) {
     const info = await ytInfo(canon);
     const video_id = info?.id || randomUUID();
 
-
     await upsertVideo({ platform: 'youtube', video_id, title: info?.title, duration_sec: info?.duration, thumb_url: info?.thumbnail });
-
 
     const h264 = pickH264Mp4Formats(info);
     if (!h264.length) {
@@ -43,12 +41,14 @@ export async function askYoutubeFormat(ctx, url) {
 
 export async function handleYoutubeChoice(ctx, data) {
     // data: yt|<vid>|itag:NNN|h:720
+    console.log('YT choice data:', data);
     const [, video_id, itagPart, hPart] = data.split('|');
     const itag = Number((itagPart.split(':')[1] || '').trim());
     const height = Number((hPart.split(':')[1] || '').trim());
     const fkey = formatKey({ source: 'yt', itag, height, ext: 'mp4' });
 
-
+    console.log('YT choice:', { video_id, itag, height, fkey });
+    
     // fast path: DB cached telegram file
     const cached = await getVideoFile({ platform: 'youtube', video_id, format_key: fkey });
     if (cached?.telegram_file_id) {
@@ -56,19 +56,15 @@ export async function handleYoutubeChoice(ctx, data) {
         return ctx.replyWithVideo(cached.telegram_file_id, { supports_streaming: true, caption: `YouTube ${height}p` });
     }
 
-
     await ctx.answerCbQuery('Yuklanmoqda…');
-
 
     // need original watch url to download; reconstruct from id
     const watchUrl = `https://www.youtube.com/watch?v=${video_id}`;
     const outPath = `/tmp/${video_id}_${itag}.mp4`;
 
-
     await ytDownloadByItag(watchUrl, itag, outPath);
     const sent = await ctx.replyWithVideo({ source: outPath, filename: `${video_id}_${height}p.mp4` }, { supports_streaming: true, caption: `YouTube ${height}p` });
     const file_id = sent?.video?.file_id || sent?.document?.file_id;
-    if (file_id) {
+    if (file_id) 
         await saveVideoFile({ platform: 'youtube', video_id, format_key: fkey, height, width: null, ext: 'mp4', itag, abr_kbps: null, filesize: sent?.video?.file_size || null, telegram_file_id: file_id });
-    }
 }
