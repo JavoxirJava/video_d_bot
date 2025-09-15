@@ -61,14 +61,15 @@ export async function ytDownloadByItag(url, itag, outPath) {
 
 export async function genericToMp4(url, outPath, platform = 'instagram') {
     log('igCookieArgs:', igCookieArgs());
-    log('Exec yt-dlp with outPath:', outPath); // ✅ debug
+    log('Exec yt-dlp with outPath:', outPath);
     const args = [
         ...(platform === 'instagram' ? igCookieArgs() : []),
         '--add-header', 'Accept-Language: en-US,en;q=0.9',
-        '-f', 'bv*+ba/best',
+        '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         '-o', outPath,
         '--merge-output-format', 'mp4',
-        '--postprocessor-args', 'ffmpeg:-fflags +genpts -movflags +faststart -map 0:v:0? -map 0:a:0? -c:v libx264 -profile:v high -level 4.1 -pix_fmt yuv420p -preset veryfast -r 30 -vsync 2 -c:a aac -b:a 160k -ar 48000 -ac 2 -shortest', //  -map 0:v:0 -map 0:a:0? -c:v libx264 -profile:v high -level:v 4.1 -pix_fmt yuv420p -preset veryfast -r 30 -vsync 2 -c:a aac -b:a 160k -ar 48000 -ac 2 -shortest -vf scale=trunc(iw/2)*2:trunc(ih/2)*2
+        '--recode-video', 'mp4',   // ✅ ffmpeg avtomatik re-encode qiladi
+        '--postprocessor-args', 'ffmpeg:-movflags +faststart -pix_fmt yuv420p -r 30 -vsync 2',
         url
     ];
     await execYtDlp(args);
