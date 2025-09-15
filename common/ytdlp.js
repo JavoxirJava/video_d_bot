@@ -54,12 +54,14 @@ export async function ytDownloadByItag(url, itag, outPath) {
         '-o', outPath,
         '--postprocessor-args', 'ffmpeg:-movflags +faststart',
     ];
+    log('Exec yt-dlp with outPath:', outPath);
     log('Downloading with yt-dlp:', YTDLP, args.join(' '), url);
     await execYtDlp([...args, url]);
 }
 
 export async function genericToMp4(url, outPath, platform = 'instagram') {
     log('igCookieArgs:', igCookieArgs());
+    log('Exec yt-dlp with outPath:', outPath); // ✅ debug
     const args = [
         ...(platform === 'instagram' ? igCookieArgs() : []),
         '--add-header', 'Accept-Language: en-US,en;q=0.9',
