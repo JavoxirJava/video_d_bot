@@ -92,22 +92,16 @@ export async function igDownloadRaw(url, outPath) {
     await execYtDlp([...args, url]);
 }
 
-// ytdlp.js — qo'shing
 export async function ffmpegTranscodeToH264(inPath, outPath) {
-    // -y: overwrite, -fflags +genpts: PTS generatsiya, faststart: streamable
+    // CLI’da ishlagan konfiguratsiya: H.264 + AAC + faststart
     const args = [
-        '-y',
+        '-y',                 // overwrite
         '-i', inPath,
-        '-fflags', '+genpts',
         '-c:v', 'libx264',
-        '-profile:v', 'high',
-        '-level', '4.1',
+        '-preset', 'veryfast',
+        '-crf', '23',
         '-pix_fmt', 'yuv420p',
-        '-r', '30',
-        '-vsync', '2',
         '-c:a', 'aac',
-        '-b:a', '160k',
-        '-ar', '48000',
         '-movflags', '+faststart',
         outPath
     ];
@@ -119,4 +113,5 @@ export async function ffmpegTranscodeToH264(inPath, outPath) {
         });
     });
 }
+
 
