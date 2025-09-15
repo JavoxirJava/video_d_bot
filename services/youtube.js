@@ -6,11 +6,21 @@ import { randomUUID } from 'node:crypto';
 
 
 function pickH264Mp4Formats(info) {
+    // const fmts = (info.formats || []).filter(f => {
+    //     const vOk = f.vcodec && /avc1|h264/i.test(f.vcodec);
+    //     const aOk = f.acodec && /mp4a|aac/i.test(f.acodec);
+    //     const extOk = f.ext === 'mp4';
+    //     return extOk && vOk && aOk && (f.height || 0) > 0 && f.url;
+    // });
+
     const fmts = (info.formats || []).filter(f => {
-        const vOk = f.vcodec && /avc1|h264/i.test(f.vcodec);
-        const aOk = f.acodec && /mp4a|aac/i.test(f.acodec);
-        const extOk = f.ext === 'mp4';
-        return extOk && vOk && aOk && (f.height || 0) > 0 && f.url;
+        const itagNum = Number(f.format_id);
+        if (!itagNum || Number.isNaN(itagNum)) return false;
+        if (f.ext !== 'mp4') return false;
+        if (!f.vcodec || !/avc1|h264/i.test(f.vcodec)) return false;
+        if (!f.acodec || !/mp4a|aac/i.test(f.acodec)) return false;
+        if (!f.height || !f.url) return false;
+        return true;
     });
     // unique by height, prefer higher tbr/itag
     const byH = new Map();
@@ -44,11 +54,15 @@ export async function handleYoutubeChoice(ctx, data) {
     console.log('YT choice data:', data);
     const [, video_id, itagPart, hPart] = data.split('|');
     const itag = Number((itagPart.split(':')[1] || '').trim());
+    if (!itag || Number.isNaN(itag)) {
+        await ctx.answerCbQuery('Format xatosi. Yana birini tanlang.', { show_alert: true });
+        return;
+    }
     const height = Number((hPart.split(':')[1] || '').trim());
     const fkey = formatKey({ source: 'yt', itag, height, ext: 'mp4' });
 
     console.log('YT choice:', { video_id, itag, height, fkey });
-    
+
     // fast path: DB cached telegram file
     const cached = await getVideoFile({ platform: 'youtube', video_id, format_key: fkey });
     if (cached?.telegram_file_id) {
@@ -65,6 +79,6 @@ export async function handleYoutubeChoice(ctx, data) {
     await ytDownloadByItag(watchUrl, itag, outPath);
     const sent = await ctx.replyWithVideo({ source: outPath, filename: `${video_id}_${height}p.mp4` }, { supports_streaming: true, caption: `YouTube ${height}p` });
     const file_id = sent?.video?.file_id || sent?.document?.file_id;
-    if (file_id) 
+    if (file_id)
         await saveVideoFile({ platform: 'youtube', video_id, format_key: fkey, height, width: null, ext: 'mp4', itag, abr_kbps: null, filesize: sent?.video?.file_size || null, telegram_file_id: file_id });
 }

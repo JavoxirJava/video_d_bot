@@ -32,25 +32,28 @@ function baseArgs() { return ['-4', '--no-warnings', '--no-check-certificates', 
 
 export function execYtDlp(args, opts = {}) {
     return new Promise((resolve, reject) => {
-        execFile(YTDLP, [...baseArgs(), ...args], { maxBuffer: 256e6, timeout: 300000, ...opts }, (err, stdout, stderr) => {
-            if (err) { err.stderr = stderr; return reject(err); }
-            resolve({ stdout, stderr });
-        });
+        // execFile(YTDLP, [...baseArgs(), ...args], { maxBuffer: 256e6, timeout: 300000, ...opts }, (err, stdout, stderr) => {
+        execFile(
+            YTDLP,
+            [...baseArgs(), ...args],
+            { maxBuffer: 256e6, timeout: 300000, ...opts }, // 256MB, 5 min
+            (err, stdout, stderr) => {
+                if (err) { err.stderr = stderr; return reject(err); }
+                resolve({ stdout, stderr });
+            }
+        );
+        // });
     });
 }
 
 export async function ytInfo(url) {
-    const { stdout } = await execYtDlp([
-        '-J',
-        ...ytCookieArgs(),
-        '--add-header', 'Referer: https://www.youtube.com/',
-        url
-    ]);
+    const { stdout } = await execYtDlp(['-J', ...ytCookieArgs(), '--add-header', 'Referer: https://www.youtube.com/', url]);
     return JSON.parse(stdout);
 }
 
 export async function ytDownloadByItag(url, itag, outPath) {
-    const fmt = `${itag}+bestaudio[ext=m4a]/${itag}`;
+    // const fmt = `${itag}+bestaudio[ext=m4a]/${itag}`;
+    const fmt = `[itag=${itag}][vcodec*=avc1][ext=mp4]+bestaudio[ext=m4a]/[itag=${itag}]`;
     const args = [
         ...EXTRACTOR_ARGS,
         ...ytCookieArgs(),
