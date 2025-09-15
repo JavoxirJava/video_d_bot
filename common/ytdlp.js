@@ -68,7 +68,7 @@ export async function genericToMp4(url, outPath, platform = 'instagram') {
         '-f', 'bv*+ba/best',
         '-o', outPath,
         '--merge-output-format', 'mp4',
-        '--postprocessor-args', 'ffmpeg:-movflags +faststart', //  -map 0:v:0 -map 0:a:0? -c:v libx264 -profile:v high -level:v 4.1 -pix_fmt yuv420p -preset veryfast -r 30 -vsync 2 -c:a aac -b:a 160k -ar 48000 -ac 2 -shortest -vf scale=trunc(iw/2)*2:trunc(ih/2)*2
+        '--postprocessor-args', 'ffmpeg:-fflags +genpts -movflags +faststart -map 0:v:0? -map 0:a:0? -c:v libx264 -profile:v high -level 4.1 -pix_fmt yuv420p -preset veryfast -r 30 -vsync 2 -c:a aac -b:a 160k -ar 48000 -ac 2 -shortest', //  -map 0:v:0 -map 0:a:0? -c:v libx264 -profile:v high -level:v 4.1 -pix_fmt yuv420p -preset veryfast -r 30 -vsync 2 -c:a aac -b:a 160k -ar 48000 -ac 2 -shortest -vf scale=trunc(iw/2)*2:trunc(ih/2)*2
         url
     ];
     await execYtDlp(args);
