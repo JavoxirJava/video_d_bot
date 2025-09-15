@@ -62,15 +62,18 @@ export async function ytDownloadByItag(url, itag, outPath) {
 export async function genericToMp4(url, outPath, platform = 'instagram') {
     log('igCookieArgs:', igCookieArgs());
     log('Exec yt-dlp with outPath:', outPath);
+
     const args = [
         ...(platform === 'instagram' ? igCookieArgs() : []),
         '--add-header', 'Accept-Language: en-US,en;q=0.9',
         '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         '-o', outPath,
         '--merge-output-format', 'mp4',
-        '--recode-video', 'mp4',   // ✅ ffmpeg avtomatik re-encode qiladi
-        '--postprocessor-args', 'ffmpeg:-movflags +faststart -pix_fmt yuv420p -r 30 -vsync 2',
+        '--postprocessor-args',
+        // ✅ majburiy re-encode H.264
+        'ffmpeg:-c:v libx264 -pix_fmt yuv420p -r 30 -vsync 2 -c:a aac -b:a 160k -ar 48000 -movflags +faststart',
         url
     ];
+
     await execYtDlp(args);
 }
