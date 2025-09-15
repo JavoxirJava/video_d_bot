@@ -7,8 +7,8 @@ import { randomUUID } from 'node:crypto';
 
 function pickH264Mp4Formats(info) {
     const fmts = (info.formats || []).filter(f => {
-        const vOk = !f.vcodec || /avc1|h264/i.test(f.vcodec);
-        const aOk = !f.acodec || /mp4a|aac/i.test(f.acodec);
+        const vOk = f.vcodec && /avc1|h264/i.test(f.vcodec);
+        const aOk = f.acodec && /mp4a|aac/i.test(f.acodec);
         const extOk = f.ext === 'mp4';
         return extOk && vOk && aOk && (f.height || 0) > 0 && f.url;
     });
@@ -29,9 +29,9 @@ export async function askYoutubeFormat(ctx, url) {
     await upsertVideo({ platform: 'youtube', video_id, title: info?.title, duration_sec: info?.duration, thumb_url: info?.thumbnail });
 
     const h264 = pickH264Mp4Formats(info);
-    if (!h264.length) {
+    if (!h264.length)
         return ctx.reply('Format topilmadi. Qaytadan urinib ko‘ring.');
-    }
+
     const buttons = h264.map(f => ({
         label: `${f.height}p`,
         data: `yt|${video_id}|itag:${f.format_id}|h:${f.height}`

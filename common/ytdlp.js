@@ -32,7 +32,7 @@ function baseArgs() { return ['-4', '--no-warnings', '--no-check-certificates', 
 
 export function execYtDlp(args, opts = {}) {
     return new Promise((resolve, reject) => {
-        execFile(YTDLP, [...baseArgs(), ...args], { maxBuffer: 64e6, ...opts }, (err, stdout, stderr) => {
+        execFile(YTDLP, [...baseArgs(), ...args], { maxBuffer: 256e6, timeout: 300000, ...opts }, (err, stdout, stderr) => {
             if (err) { err.stderr = stderr; return reject(err); }
             resolve({ stdout, stderr });
         });
@@ -40,22 +40,26 @@ export function execYtDlp(args, opts = {}) {
 }
 
 export async function ytInfo(url) {
-    const { stdout } = await execYtDlp(['-J', ...ytCookieArgs(), '--add-header', 'Referer: https://www.youtube.com/', url]);
-    log('YT-DLP INFO:', stdout);
+    const { stdout } = await execYtDlp([
+        '-J',
+        ...ytCookieArgs(),
+        '--add-header', 'Referer: https://www.youtube.com/',
+        url
+    ]);
     return JSON.parse(stdout);
 }
 
 export async function ytDownloadByItag(url, itag, outPath) {
+    const fmt = `${itag}+bestaudio[ext=m4a]/${itag}`;
     const args = [
         ...EXTRACTOR_ARGS,
         ...ytCookieArgs(),
         '--add-header', 'Referer: https://www.youtube.com/',
-        '-f', String(itag),
+        '-f', fmt,
         '-o', outPath,
-        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
+        '--merge-output-format', 'mp4',
+        '--postprocessor-args', 'ffmpeg:-movflags +faststart'
     ];
-    log('Exec yt-dlp with outPath:', outPath);
-    log('Downloading with yt-dlp:', YTDLP, args.join(' '), url);
     await execYtDlp([...args, url]);
 }
 
