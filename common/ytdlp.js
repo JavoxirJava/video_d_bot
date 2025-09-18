@@ -131,6 +131,6 @@ export async function ytDownloadByFormatSpec(url, fspec, outPath) {
         '--merge-output-format', 'mp4',
         '--postprocessor-args', 'ffmpeg:-movflags +faststart',
     ];
-    log('[YT download fspec]', YTDLP, [...args, url].join(' '));
+    console.log('[YT download fspec]', [...args, url].join(' '));
     await execYtDlp([...args, url]);
 }

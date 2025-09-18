@@ -36,79 +36,108 @@ export async function askYoutubeFormat(ctx, url) {
     const info = await ytInfo(canon);
     const video_id = info?.id || randomUUID();
 
-    await upsertVideo({ platform: 'youtube', video_id, title: info?.title, duration_sec: info?.duration, thumb_url: info?.thumbnail });
+    await upsertVideo({
+        platform: 'youtube',
+        video_id,
+        title: info?.title,
+        duration_sec: info?.duration,
+        thumb_url: info?.thumbnail
+    });
 
-    const cand = buildCandidates(info);
-    if (!cand.length) return ctx.reply('Format topilmadi. Qaytadan urinib ko‘ring.');
+    // Mavjud formatlardan balandliklarni yig‘amiz (10 tagacha)
+    const heights = Array.from(
+        new Set(
+            (info.formats || [])
+                .map(f => f.height)
+                .filter(h => typeof h === 'number' && h > 0)
+                .map(h => normHeight(h)) // pastdagi helper
+        )
+    ).sort((a, b) => a - b).slice(0, 6);
 
-    // const buttons = h264.map(f => ({
-    //     label: `${f.height}p`,
-    //     data: `yt|${video_id}|itag:${f.format_id}|h:${f.height}`
-    // }));
-    const buttons = cand.map(f => ({
-        label: `${f.height}p`,
-        // fspec callback ichida URL-safe bo‘lishi uchun base64 qildik
-        data: `yt|${video_id}|fspec:${Buffer.from(f.fspec).toString('base64')}|h:${f.height}`
+    if (!heights.length) return ctx.reply('Format topilmadi. Qaytadan urinib ko‘ring.');
+
+    const buttons = heights.map(h => ({
+        label: `${h}p`,
+        // ⚠️ qisqa data, 64 baytdan oshmaydi
+        data: `yt|${video_id}|h:${h}`
     }));
 
-    return ctx.reply(`YouTube: formati tanlang\n${info.title || ''}`, ytFormatsKeyboard(buttons));
+    return ctx.reply(
+        `YouTube: formati tanlang\n${info.title || ''}`,
+        ytFormatsKeyboard(buttons)
+    );
 }
 
 export async function handleYoutubeChoice(ctx, data) {
-    // data: yt|<vid>|itag:NNN|h:720
-    // console.log('YT choice data:', data);
-    // const [, video_id, itagPart, hPart] = data.split('|');
-    // const itag = Number((itagPart.split(':')[1] || '').trim());
-    // if (!itag || Number.isNaN(itag)) {
-    //     await ctx.answerCbQuery('Format xatosi. Yana birini tanlang.', { show_alert: true });
-    //     return;
-    // }
-    // const height = Number((hPart.split(':')[1] || '').trim());
-    // const fkey = formatKey({ source: 'yt', itag, height, ext: 'mp4' });
-    const parts = data.split('|');
-    const video_id = parts[1];
-    const fspecB64 = (parts.find(p => p.startsWith('fspec:')) || '').slice(6);
-    const height = Number((parts.find(p => p.startsWith('h:')) || '').slice(2));
-    if (!fspecB64) return ctx.answerCbQuery('Format xatosi', { show_alert: true });
-    const fspec = Buffer.from(fspecB64, 'base64').toString('utf8');
-    const fkey = formatKey({ source: 'yt', height, ext: 'mp4' }); // itag o‘rniga height+mp4
+    console.log('YT choice data:', data);
+    const [, video_id, hPart] = data.split('|');
+    const height = Number((hPart?.split(':')[1] || '').trim());
+    if (!video_id || !height) {
+        await ctx.answerCbQuery('Format xatosi', { show_alert: true });
+        return;
+    }
 
-    console.log('YT choice:', { video_id, itag, height, fkey });
+    const fkey = formatKey({ source: 'yt', height, ext: 'mp4' });
+    console.log('YT choice:', { video_id, height, fkey });
 
-    // fast path: DB cached telegram file
+    // 1) kesh
     const cached = await getVideoFile({ platform: 'youtube', video_id, format_key: fkey });
     if (cached?.telegram_file_id) {
         await ctx.answerCbQuery('Keshdan');
-        return ctx.replyWithVideo(cached.telegram_file_id, { supports_streaming: true, caption: `YouTube ${height}p` });
+        return ctx.replyWithVideo(
+            cached.telegram_file_id,
+            { supports_streaming: true, caption: `YouTube ${height}p` }
+        );
     }
 
     await ctx.answerCbQuery('Yuklanmoqda…');
 
-    // need original watch url to download; reconstruct from id
+    // 2) fspec — avval progressive  (avc1+mp4a), bo‘lmasa adaptive juftlik
+    const fspecPrimary =
+        `[ext=mp4][vcodec*=avc1][acodec*=mp4a][height=${height}]` +
+        `/best[ext=mp4][height=${height}]`;
+    const fspecFallback =
+        `bestvideo[height<=${height}][vcodec*=avc1][ext=mp4]+bestaudio[ext=m4a]` +
+        `/best[ext=mp4][height<=${height}]`;
+
     const watchUrl = `https://www.youtube.com/watch?v=${video_id}`;
-    const outPath = `/tmp/${video_id}_${itag}.mp4`;
+    const outPath = `/tmp/${video_id}_${height}.mp4`;
 
     try {
-        await ytDownloadByFormatSpec(watchUrl, fspec, outPath);
+        await ytDownloadByFormatSpec(watchUrl, fspecPrimary, outPath);
     } catch (e) {
-        // fallback: <=H bilan urinib ko‘ramiz
-        const fallback = `bestvideo[height<=${height}][vcodec*=avc1][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=${height}]`;
-        console.error('Primary fspec failed, retry with fallback:', fallback);
-        await ytDownloadByFormatSpec(watchUrl, fallback, outPath);
+        console.error('Primary fspec failed, retry fallback…', e?.stderr || e);
+        await ytDownloadByFormatSpec(watchUrl, fspecFallback, outPath);
     }
-    const sent = await ctx.replyWithVideo({ source: outPath, filename: `${video_id}_${height}p.mp4` }, { supports_streaming: true, caption: `YouTube ${height}p` });
+
+    const sent = await ctx.replyWithVideo(
+        { source: outPath, filename: `${video_id}_${height}p.mp4` },
+        { supports_streaming: true, caption: `YouTube ${height}p` }
+    );
+
     const file_id = sent?.video?.file_id || sent?.document?.file_id;
-    if (file_id)
-        await saveVideoFile({ platform: 'youtube', video_id, format_key: fkey, height, width: null, ext: 'mp4', itag, abr_kbps: null, filesize: sent?.video?.file_size || null, telegram_file_id: file_id });
+    if (file_id) {
+        await saveVideoFile({
+            platform: 'youtube',
+            video_id,
+            format_key: fkey,
+            height,
+            width: null,
+            ext: 'mp4',
+            itag: null,
+            abr_kbps: null,
+            filesize: sent?.video?.file_size || null,
+            telegram_file_id: file_id
+        });
+    }
 }
 
 function normHeight(h) {
-    if (!h) return null;
     const bins = [144, 240, 360, 480, 720, 1080, 1440, 2160];
-    let best = bins[0], mind = Infinity;
+    let best = bins[0], dmin = Infinity;
     for (const b of bins) {
         const d = Math.abs(h - b);
-        if (d < mind) { mind = d; best = b; }
+        if (d < dmin) { dmin = d; best = b; }
     }
     return best;
 }
