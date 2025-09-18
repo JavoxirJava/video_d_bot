@@ -92,22 +92,33 @@ export async function handleYoutubeChoice(ctx, data) {
 
     await ctx.answerCbQuery('Yuklanmoqda…');
 
-    // 2) fspec — avval progressive  (avc1+mp4a), bo‘lmasa adaptive juftlik
-    const fspecPrimary =
-        `[ext=mp4][vcodec*=avc1][acodec*=mp4a][height=${height}]` +
-        `/best[ext=mp4][height=${height}]`;
-    const fspecFallback =
-        `bestvideo[height<=${height}][vcodec*=avc1][ext=mp4]+bestaudio[ext=m4a]` +
-        `/best[ext=mp4][height<=${height}]`;
-
     const watchUrl = `https://www.youtube.com/watch?v=${video_id}`;
     const outPath = `/tmp/${video_id}_${height}.mp4`;
 
+    // 1) Progressive mp4 (avc1+mp4a) aynan shu balandlikda
+    const fspecPrimary =
+        `[ext=mp4][vcodec*=avc1][acodec*=mp4a][height=${height}]/best[ext=mp4][height=${height}]`;
+
+    // 2) Adaptive avc1 video + m4a audio, <=H
+    const fspecFallback1 =
+        `bestvideo[height<=${height}][vcodec*=avc1][ext=mp4]+bestaudio[ext=m4a]`
+        + `/best[ext=mp4][height<=${height}]`;
+
+    // 3) Juda moslashuvchan: istalgan kodek/konteyner (vp9/webm bo‘lsa ham) — keyin mp4 ga recode
+    const fspecFallback2 =
+        `bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
+
     try {
         await ytDownloadByFormatSpec(watchUrl, fspecPrimary, outPath);
-    } catch (e) {
-        console.error('Primary fspec failed, retry fallback…', e?.stderr || e);
-        await ytDownloadByFormatSpec(watchUrl, fspecFallback, outPath);
+    } catch (e1) {
+        console.error('Primary failed:', e1?.stderr || e1);
+        try {
+            await ytDownloadByFormatSpec(watchUrl, fspecFallback1, outPath);
+        } catch (e2) {
+            console.error('Fallback1 failed:', e2?.stderr || e2);
+            // oxirgi urinish: keng fspec + recode mp4
+            await ytDownloadByFormatSpec(watchUrl, fspecFallback2, outPath, { recode: true });
+        }
     }
 
     const sent = await ctx.replyWithVideo(

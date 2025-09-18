@@ -121,7 +121,8 @@ export async function ffmpegTranscodeToH264(inPath, outPath) {
     });
 }
 
-export async function ytDownloadByFormatSpec(url, fspec, outPath) {
+export async function ytDownloadByFormatSpec(url, fspec, outPath, opts = {}) {
+    const { recode = false } = opts; // recode bo'lsa, webm/vp9 ham olinadi va mp4 ga o'tkaziladi
     const args = [
         ...EXTRACTOR_ARGS,
         ...ytCookieArgs(),
@@ -131,6 +132,10 @@ export async function ytDownloadByFormatSpec(url, fspec, outPath) {
         '--merge-output-format', 'mp4',
         '--postprocessor-args', 'ffmpeg:-movflags +faststart',
     ];
+    if (recode) {
+        // formati qanday bo'lsa ham yakunda mp4 qilib qo'y
+        args.push('--recode-video', 'mp4');
+    }
     console.log('[YT download fspec]', [...args, url].join(' '));
     await execYtDlp([...args, url]);
 }
