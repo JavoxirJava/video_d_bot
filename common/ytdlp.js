@@ -121,4 +121,16 @@ export async function ffmpegTranscodeToH264(inPath, outPath) {
     });
 }
 
-
+export async function ytDownloadByFormatSpec(url, fspec, outPath) {
+    const args = [
+        ...EXTRACTOR_ARGS,
+        ...ytCookieArgs(),
+        '--add-header', 'Referer: https://www.youtube.com/',
+        '-f', fspec,
+        '-o', outPath,
+        '--merge-output-format', 'mp4',
+        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
+    ];
+    log('[YT download fspec]', YTDLP, [...args, url].join(' '));
+    await execYtDlp([...args, url]);
+}
