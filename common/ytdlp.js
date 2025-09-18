@@ -51,21 +51,6 @@ export async function ytInfo(url) {
     return JSON.parse(stdout);
 }
 
-export async function ytDownloadByItag(url, itag, outPath) {
-    // const fmt = `${itag}+bestaudio[ext=m4a]/${itag}`;
-    const fmt = `[itag=${itag}][vcodec*=avc1][ext=mp4]+bestaudio[ext=m4a]/[itag=${itag}]`;
-    const args = [
-        ...EXTRACTOR_ARGS,
-        ...ytCookieArgs(),
-        '--add-header', 'Referer: https://www.youtube.com/',
-        '-f', fmt,
-        '-o', outPath,
-        '--merge-output-format', 'mp4',
-        '--postprocessor-args', 'ffmpeg:-movflags +faststart'
-    ];
-    await execYtDlp([...args, url]);
-}
-
 export async function genericToMp4(url, outPath, platform = 'instagram') {
     log('igCookieArgs:', igCookieArgs());
     log('Exec yt-dlp with outPath:', outPath);
@@ -121,21 +106,38 @@ export async function ffmpegTranscodeToH264(inPath, outPath) {
     });
 }
 
-export async function ytDownloadByFormatSpec(url, fspec, outPath, opts = {}) {
-    const { recode = false } = opts; // recode bo'lsa, webm/vp9 ham olinadi va mp4 ga o'tkaziladi
-    const args = [
+export async function ytDownloadByHeightSmart(url, height, outPath) {
+    // 1-urinish: mp4 + avc1 + m4a ga preferensiya beramiz
+    const primaryArgs = [
         ...EXTRACTOR_ARGS,
         ...ytCookieArgs(),
         '--add-header', 'Referer: https://www.youtube.com/',
-        '-f', fspec,
+        '-f', 'bv*+ba/b',
+        '-S', `res:${height},ext:mp4,vcodec:avc1,acodec:m4a`, // eng yaqin 240p mp4/h264/m4a
         '-o', outPath,
         '--merge-output-format', 'mp4',
         '--postprocessor-args', 'ffmpeg:-movflags +faststart',
     ];
-    if (recode) {
-        // formati qanday bo'lsa ham yakunda mp4 qilib qo'y
-        args.push('--recode-video', 'mp4');
+    console.log('[YT smart h primary]', [...primaryArgs, url].join(' '));
+    try {
+        await execYtDlp([...primaryArgs, url]);
+        return;
+    } catch (e) {
+        console.error('YT smart primary failed:', e?.stderr || e);
     }
-    console.log('[YT download fspec]', [...args, url].join(' '));
-    await execYtDlp([...args, url]);
+
+    // 2-urinish: faqat res bo‘yicha (kodek/konteynerni cheklamaymiz)
+    const fallbackArgs = [
+        ...EXTRACTOR_ARGS,
+        ...ytCookieArgs(),
+        '--add-header', 'Referer: https://www.youtube.com/',
+        '-f', 'bv*+ba/b',
+        '-S', `res:${height}`, // mavjudiga eng yaqinini oladi
+        '-o', outPath,
+        '--merge-output-format', 'mp4',
+        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
+        '--recode-video', 'mp4', // agar webm/vp9 tanlansa ham mp4 ga aylantir
+    ];
+    console.log('[YT smart h fallback]', [...fallbackArgs, url].join(' '));
+    await execYtDlp([...fallbackArgs, url]);
 }
