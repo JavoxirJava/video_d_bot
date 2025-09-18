@@ -107,37 +107,69 @@ export async function ffmpegTranscodeToH264(inPath, outPath) {
 }
 
 export async function ytDownloadByHeightSmart(url, height, outPath) {
-    // 1-urinish: mp4 + avc1 + m4a ga preferensiya beramiz
-    const primaryArgs = [
-        ...EXTRACTOR_ARGS,
-        ...ytCookieArgs(),
-        '--add-header', 'Referer: https://www.youtube.com/',
-        '-f', 'bv*+ba/b',
-        '-S', `res:${height},ext:mp4,vcodec:avc1,acodec:m4a`, // eng yaqin 240p mp4/h264/m4a
-        '-o', outPath,
-        '--merge-output-format', 'mp4',
-        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
+    // 1) bir nechta player_client bilan urinib chiqamiz
+    const clientVariants = [
+        [], // default (web)
+        ['--extractor-args', 'youtube:player_client=web_safari'],
+        ['--extractor-args', 'youtube:player_client=web'],
+        ['--extractor-args', 'youtube:player_client=android'],
+        ['--extractor-args', 'youtube:player_client=ios'],
     ];
-    console.log('[YT smart h primary]', [...primaryArgs, url].join(' '));
-    try {
-        await execYtDlp([...primaryArgs, url]);
-        return;
-    } catch (e) {
-        console.error('YT smart primary failed:', e?.stderr || e);
-    }
 
-    // 2-urinish: faqat res bo‘yicha (kodek/konteynerni cheklamaymiz)
-    const fallbackArgs = [
-        ...EXTRACTOR_ARGS,
+    // 2) uchta format strategiyasi:
+    // A) mux (video+audio): bv*+ba/b   va mp4/h264/m4a'ga preferensiya
+    const stratA = (extra) => ([
+        ...extra,
         ...ytCookieArgs(),
         '--add-header', 'Referer: https://www.youtube.com/',
         '-f', 'bv*+ba/b',
-        '-S', `res:${height}`, // mavjudiga eng yaqinini oladi
+        '-S', `res:${height},ext:mp4,vcodec:avc1,acodec:m4a`,
         '-o', outPath,
         '--merge-output-format', 'mp4',
         '--postprocessor-args', 'ffmpeg:-movflags +faststart',
-        '--recode-video', 'mp4', // agar webm/vp9 tanlansa ham mp4 ga aylantir
-    ];
-    console.log('[YT smart h fallback]', [...fallbackArgs, url].join(' '));
-    await execYtDlp([...fallbackArgs, url]);
+    ]);
+
+    // B) faqat progressive (b) — ba’zi roliklarda shartli mavjud
+    const stratB = (extra) => ([
+        ...extra,
+        ...ytCookieArgs(),
+        '--add-header', 'Referer: https://www.youtube.com/',
+        '-f', 'b',
+        '-S', `res:${height},ext:mp4`,
+        '-o', outPath,
+        '--merge-output-format', 'mp4',
+        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
+    ]);
+
+    // C) eng mosini ol, keyin mp4 ga recode qil (webm/vp9 bo‘lsa ham)
+    const stratC = (extra) => ([
+        ...extra,
+        ...ytCookieArgs(),
+        '--add-header', 'Referer: https://www.youtube.com/',
+        '-f', 'bv*+ba/b',
+        '-S', `res:${height}`,
+        '-o', outPath,
+        '--merge-output-format', 'mp4',
+        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
+        '--recode-video', 'mp4',
+    ]);
+
+    const strategies = [stratA, stratB, stratC];
+
+    let lastErr;
+    for (const client of clientVariants) {
+        for (const makeArgs of strategies) {
+            const args = makeArgs(client);
+            console.log('[YT smart try]', [...args, url].join(' '));
+            try {
+                await execYtDlp([...args, url]);
+                return; // muvaffaqiyatli – chiqamiz
+            } catch (e) {
+                lastErr = e;
+                console.error('YT smart try failed:', e?.stderr || e);
+            }
+        }
+    }
+    // hammasi yiqilsa — shu xatoni ko‘taramiz
+    throw lastErr || new Error('yt-dlp selection failed');
 }

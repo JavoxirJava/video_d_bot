@@ -18,7 +18,6 @@ bot.use(ensureSubscribed);
 
 // Callback handler for YouTube format buttons
 bot.on('callback_query', async (ctx) => {
-    console.log('Callback query:', ctx.callbackQuery);
     const data = ctx.callbackQuery?.data || '';
     try {
         if (data.startsWith('yt|')) return await handleYoutubeChoice(ctx, data);
