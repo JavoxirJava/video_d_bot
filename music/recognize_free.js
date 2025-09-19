@@ -45,20 +45,77 @@ async function fpcalcJson(wavPath) {
 
 async function acoustIdIdentify(fingerprint, durationSec) {
     if (!ACOUSTID_KEY) throw new Error('ACOUSTID_API_KEY yo‘q');
-    const body = new URLSearchParams({
+
+    const form = new URLSearchParams({
         client: ACOUSTID_KEY,
         duration: String(Math.round(durationSec || SNIPPET_SEC)),
         fingerprint,
         meta: 'recordings+releasegroups+compress'
     });
-    const res = await fetch('https://api.acoustid.org/v2/identify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body
-    });
-    if (!res.ok) throw new Error(`acoustid http ${res.status}`);
-    return res.json();
+
+    // Helper: bitta urinish (POST)
+    const doPost = async (url) => {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                // Ba’zi konfiguratsiyalarda shu headerlar shart bo‘ladi:
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'Accept': 'application/json',
+                'User-Agent': 'video-bot/1.0 (+https://example.com)'
+            },
+            body: form
+        });
+        const text = await res.text(); // xatoda ham o‘qiymiz
+        if (!res.ok) {
+            const err = new Error(`acoustid http ${res.status}`);
+            err.responseText = text;
+            throw err;
+        }
+        try { return JSON.parse(text); } catch {
+            // ehtiyot uchun
+            return JSON.parse('{}');
+        }
+    };
+
+    // 1) asosiy endpoint (POST, no trailing slash)
+    try {
+        return await doPost('https://api.acoustid.org/v2/identify');
+    } catch (e1) {
+        // 2) 404 bo‘lsa trailing slash bilan yana urinib ko‘ramiz
+        if (String(e1.message).includes('404')) {
+            try {
+                return await doPost('https://api.acoustid.org/v2/identify/');
+            } catch (e2) {
+                // 3) yana 404 bo‘lsa GET-query fallback (oxirgi chora)
+                if (String(e2.message).includes('404')) {
+                    const url = new URL('https://api.acoustid.org/v2/identify');
+                    url.searchParams.set('client', ACOUSTID_KEY);
+                    url.searchParams.set('duration', String(Math.round(durationSec || SNIPPET_SEC)));
+                    url.searchParams.set('meta', 'recordings+releasegroups+compress');
+                    url.searchParams.set('fingerprint', fingerprint);
+
+                    const res = await fetch(url.toString(), {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json',
+                            'User-Agent': 'video-bot/1.0 (+https://example.com)'
+                        }
+                    });
+                    const text = await res.text();
+                    if (!res.ok) {
+                        const err = new Error(`acoustid http ${res.status}`);
+                        err.responseText = text;
+                        throw err;
+                    }
+                    return JSON.parse(text);
+                }
+                throw e2;
+            }
+        }
+        throw e1;
+    }
 }
+
 
 function mapAcoustIdResults(json) {
     // JSON → {title, artist, album, duration_sec, external_id}

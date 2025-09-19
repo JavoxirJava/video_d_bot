@@ -181,8 +181,6 @@ export async function registerMusicHandlers(ctx) {
  * Har bosqichda status edit bo‘ladi. Topilmasa Premium CTA.
  */
 export async function handleVoiceMusic(ctx, bot) {
-    console.log('Voice message from', ctx.from.id);
-    
     // 1) Telegram faylini yuklab olamiz
     const voice = ctx.message?.voice || ctx.message?.audio;
     if (!voice) return;
