@@ -36,8 +36,6 @@ export async function buttonMusic(ctx, data, bot) {
     const kbps = ctx.from?.is_premium ? 192 : Number(process.env.MUSIC_FREE_MAX_BITRATE || 128);
     const key = makeTrackKey({ title: t.title, artist: t.artist, duration_sec: t.duration_sec, kbps });
 
-    console.log('Track key:', key, kbps);
-
     // kesh: track_files dan tekshiramiz
     const kq = await pool.query('SELECT * FROM track_files WHERE track_key=$1 LIMIT 1', [key]);
     if (kq.rows[0]?.telegram_file_id) {
@@ -46,7 +44,7 @@ export async function buttonMusic(ctx, data, bot) {
             title: t.title, performer: t.artist, caption: `${t.title} — ${t.artist}`
         });
     }
-    send = await ctx.reply(`Yuklanmoqda (${kbps} kbps)… Iltimos kuting.`);
+    send = await ctx.reply(`⌛️ Yuklanmoqda Iltimos kuting...`);
     await ctx.answerCbQuery('Yuklanmoqda…');
 
     const tmp = `/tmp/${key}.mp3`;
