@@ -84,9 +84,7 @@ export async function registerMusicHandlers(ctx) {
 
     // natijalarni tugmalar bilan chiqazamiz
     const rows = results.map(r => ([
-        { text: `🎵 ${r.title} — ${r.artist}`, callback_data: `msel|${r.external_id}` },
-        { text: '🎧 MP3', callback_data: `mget|${r.external_id}` },
-        r.preview_url ? { text: '▶️ Preview', url: r.preview_url } : null
+        { text: `🎵 ${r.title} — ${r.artist}`, callback_data: `msel|${r.external_id}` }
     ].filter(Boolean)));
 
     // cache tracks jadvaliga (best-effort)
