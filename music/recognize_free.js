@@ -7,7 +7,10 @@ const FP = process.env.FPCALC_PATH || '/usr/bin/fpcalc';
 const FFPROBE = process.env.FFPROBE_PATH || '/usr/bin/ffprobe';
 
 const ACOUSTID_KEY = process.env.ACOUSTID_API_KEY;
-const SNIPPET_SEC = 22;
+export const SNIPPET_SEC = Number(process.env.FP_SNIPPET_SEC || 22);
+const SAMPLE_RATE = Number(process.env.FP_SAMPLE_RATE || 11025); // Chromaprint uchun juda mos
+const AUDIO_FILTER = process.env.FP_AF || 'dynaudnorm=f=150:g=15,highpass=f=60,lowpass=f=9000';
+
 
 function sh(cmd, args, opts = {}) {
     return new Promise((resolve, reject) => {
@@ -30,13 +33,15 @@ export async function probeDurationSec(inPath) {
 
 async function makeSnippet(inPath, outPath, ss, t = SNIPPET_SEC) {
     const args = [
-        '-y', '-ss', String(Math.max(0, ss)), '-t', String(t),
+        '-y',
+        '-ss', String(Math.max(0, ss)),
+        '-t', String(t),
         '-i', inPath,
         '-vn',
-        '-ac', '1',           // mono
-        '-ar', '44100',       // 44.1 kHz
-        // yengil shovqin filtrlari (ixtiyoriy, lekin ko‘pincha yordam beradi)
-        '-af', 'highpass=f=100,lowpass=f=8000',
+        '-ac', '1',                 // mono
+        '-ar', String(SAMPLE_RATE), // 11025 Hz (Chromaprint juda yaxshi qabul qiladi)
+        '-acodec', 'pcm_s16le',     // 16-bit PCM
+        '-af', AUDIO_FILTER,        // yengil normalizatsiya + shovqinni kesish
         '-f', 'wav',
         outPath
     ];
@@ -163,7 +168,7 @@ export async function recognizeFree(inPath, onStatus = async () => { }) {
     // snippet pozitsiyalari: o‘rta → bosh → oxir
     const positions = [];
     if (dur && dur > SNIPPET_SEC + 2) {
-        const pts = [0.10, 0.30, 0.50, 0.70, 0.90];
+        const pts = [0.10, 0.30, 0.50, 0.70, 0.90]; // 5 nuqta
         for (const p of pts) {
             const ss = Math.max(0, dur * p - SNIPPET_SEC / 2);
             positions.push(ss);
@@ -188,17 +193,17 @@ export async function recognizeFree(inPath, onStatus = async () => { }) {
         await onStatus(`🌐 Snippet ${i + 1}: AcoustID so‘rovi…`);
         const json = await acoustIdIdentify(fp, dd);
         const mapped = mapAcoustIdResults(json);
-        console.log(`[acoustid] snippet#${i + 1} results=${mapped.length} topScore=${mapped[0]?.score ?? 0} top="${mapped[0]?.title} — ${mapped[0]?.artist}"`);
+        console.log(
+            `[acoustid] snippet#${i + 1} results=${mapped.length} ` +
+            `topScore=${mapped[0]?.score ?? 0} ` +
+            `top="${mapped[0]?.title || ''} — ${mapped[0]?.artist || ''}"`
+        );
         if (mapped.length) {
-            // birinchi natijani vaqtincha eslab turamiz
             if (!best.length) best = mapped;
-            // “yaxshi” deb qabul qilish chegarasini bir oz tushiramiz
-            if (mapped[0]?.score >= 0.60) { best = mapped; break; }
-        }
-        // “yaxshi match” bo‘lsa to‘xtatamiz
-        if (mapped[0]?.score >= 0.70) {
-            best = mapped;
-            break;
+            if ((mapped[0]?.score || 0) >= 0.60) {
+                best = mapped;
+                break;
+            }
         }
     }
     return best.slice(0, 6);
