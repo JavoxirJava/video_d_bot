@@ -7,7 +7,7 @@ import { mainMenu, premiumCTA } from '../keyboards.js';
 import { ensureSubscribed } from '../middlewares/subscription.js';
 import { handleInstagram } from '../services/instagram.js';
 import { askYoutubeFormat, handleYoutubeChoice } from '../services/youtube.js';
-import { buttonMusic, buttonMusicPager, clickMusic, registerMusicHandlers } from './music.js';
+import { buttonMusic, buttonMusicPager, clickMusic, handleVoiceMusic, registerMusicHandlers } from './music.js';
 
 const bot = new Telegraf(process.env.BOT_TOKEN, { handlerTimeout: Infinity });
 const session = new Map();
@@ -36,6 +36,7 @@ bot.on('callback_query', async (ctx) => {
 
 // Text messages: detect URL(s)
 bot.on('message', async (ctx) => {
+    if (ctx.message?.voice || ctx.message?.audio) handleVoiceMusic(ctx, bot);
     if (!ctx.message?.text) return;
     if (session.get(ctx.from.id) === 'musicText') {
         registerMusicHandlers(ctx);
@@ -59,12 +60,6 @@ bot.on('message', async (ctx) => {
         }
     }
 });
-
-// voice kelganda shu handlerni chaqiring
-bot.on('voice', (ctx) => handleVoiceMusic(ctx, bot));
-// (ixtiyoriy) audio fayl yuborilganda ham ishlatish:
-bot.on('audio', (ctx) => handleVoiceMusic(ctx, bot));
-
 
 (async function main() {
     await migrate();
