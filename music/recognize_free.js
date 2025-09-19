@@ -7,7 +7,7 @@ const FP = process.env.FPCALC_PATH || '/usr/bin/fpcalc';
 const FFPROBE = process.env.FFPROBE_PATH || '/usr/bin/ffprobe';
 
 const ACOUSTID_KEY = process.env.ACOUSTID_API_KEY;
-const SNIPPET_SEC = 12;
+const SNIPPET_SEC = 22;
 
 function sh(cmd, args, opts = {}) {
     return new Promise((resolve, reject) => {
@@ -32,7 +32,11 @@ async function makeSnippet(inPath, outPath, ss, t = SNIPPET_SEC) {
     const args = [
         '-y', '-ss', String(Math.max(0, ss)), '-t', String(t),
         '-i', inPath,
-        '-vn', '-ac', '1', '-ar', '44100',
+        '-vn',
+        '-ac', '1',           // mono
+        '-ar', '44100',       // 44.1 kHz
+        // yengil shovqin filtrlari (ixtiyoriy, lekin ko‘pincha yordam beradi)
+        '-af', 'highpass=f=100,lowpass=f=8000',
         '-f', 'wav',
         outPath
     ];
@@ -159,9 +163,11 @@ export async function recognizeFree(inPath, onStatus = async () => { }) {
     // snippet pozitsiyalari: o‘rta → bosh → oxir
     const positions = [];
     if (dur && dur > SNIPPET_SEC + 2) {
-        positions.push(Math.max(0, dur / 2 - SNIPPET_SEC / 2));
-        positions.push(0);
-        positions.push(Math.max(0, dur - SNIPPET_SEC - 0.1));
+        const pts = [0.10, 0.30, 0.50, 0.70, 0.90];
+        for (const p of pts) {
+            const ss = Math.max(0, dur * p - SNIPPET_SEC / 2);
+            positions.push(ss);
+        }
     } else positions.push(0);
 
     const tmpdir = '/tmp';
@@ -182,7 +188,13 @@ export async function recognizeFree(inPath, onStatus = async () => { }) {
         await onStatus(`🌐 Snippet ${i + 1}: AcoustID so‘rovi…`);
         const json = await acoustIdIdentify(fp, dd);
         const mapped = mapAcoustIdResults(json);
-        if (mapped.length) best = best.length ? best : mapped; // birinchi muvaffaqiyat
+        console.log(`[acoustid] snippet#${i + 1} results=${mapped.length} topScore=${mapped[0]?.score ?? 0} top="${mapped[0]?.title} — ${mapped[0]?.artist}"`);
+        if (mapped.length) {
+            // birinchi natijani vaqtincha eslab turamiz
+            if (!best.length) best = mapped;
+            // “yaxshi” deb qabul qilish chegarasini bir oz tushiramiz
+            if (mapped[0]?.score >= 0.60) { best = mapped; break; }
+        }
         // “yaxshi match” bo‘lsa to‘xtatamiz
         if (mapped[0]?.score >= 0.70) {
             best = mapped;
