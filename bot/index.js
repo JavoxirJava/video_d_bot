@@ -7,8 +7,10 @@ import { askYoutubeFormat, handleYoutubeChoice } from '../services/youtube.js';
 import { handleInstagram } from '../services/instagram.js';
 import { mainMenu, premiumCTA } from '../keyboards.js';
 import { makeHttp } from '../http/server.js';
+import { buttonMusic, clickMusic, registerMusicHandlers } from './music.js';
 
 const bot = new Telegraf(process.env.BOT_TOKEN, { handlerTimeout: Infinity });
+const session = new Map();
 
 bot.start(async (ctx) => {
     await ctx.reply('Salom! Yuklamoqchi bo‘lgan linkni yuboring yoki menyudan tanlang.', mainMenu());
@@ -20,10 +22,11 @@ bot.use(ensureSubscribed);
 bot.on('callback_query', async (ctx) => {
     const data = ctx.callbackQuery?.data || '';
     try {
+        if (data.startsWith('mget|')) await buttonMusic(ctx, data); // clear loading state
         if (data.startsWith('yt|')) return await handleYoutubeChoice(ctx, data, bot);
         if (data === 'buy_premium') return ctx.reply('Premium sotib olish tez orada…', premiumCTA());
         if (data === 'menu_video') return ctx.reply('Link yuboring.');
-        if (data === 'menu_music') return ctx.reply('Musiqa qidirish tez orada…');
+        if (data === 'menu_music') return clickMusic(ctx, session);
         if (data === 'menu_ai') return ctx.reply('AI yordam tez orada…');
     } catch (e) {
         console.error('cb error', e); await ctx.answerCbQuery('Xatolik');
@@ -31,7 +34,13 @@ bot.on('callback_query', async (ctx) => {
 });
 
 // Text messages: detect URL(s)
-bot.on('text', async (ctx) => {
+bot.on('message', async (ctx) => {
+    if (!ctx.message?.text) return;
+    console.log(session.get(ctx.from.id));
+    if (session.get(ctx.from.id) === 'musicText') {
+        registerMusicHandlers(ctx);
+        return;
+    }
     const text = ctx.message.text || '';
     const urls = (text.match(/https?:\/\/[\w%\-_.?&=#/]+/gi) || []).slice(0, 2);
     if (!urls.length) return ctx.reply('URL topilmadi.');
