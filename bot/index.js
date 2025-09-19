@@ -1,13 +1,13 @@
 import 'dotenv/config';
 import { Telegraf } from 'telegraf';
-import { migrate } from '../db/index.js';
-import { ensureSubscribed } from '../middlewares/subscription.js';
 import { detectPlatform } from '../common/utils.js';
-import { askYoutubeFormat, handleYoutubeChoice } from '../services/youtube.js';
-import { handleInstagram } from '../services/instagram.js';
-import { mainMenu, premiumCTA } from '../keyboards.js';
+import { migrate } from '../db/index.js';
 import { makeHttp } from '../http/server.js';
-import { buttonMusic, clickMusic, registerMusicHandlers } from './music.js';
+import { mainMenu, premiumCTA } from '../keyboards.js';
+import { ensureSubscribed } from '../middlewares/subscription.js';
+import { handleInstagram } from '../services/instagram.js';
+import { askYoutubeFormat, handleYoutubeChoice } from '../services/youtube.js';
+import { buttonMusic, buttonMusicPager, clickMusic, registerMusicHandlers } from './music.js';
 
 const bot = new Telegraf(process.env.BOT_TOKEN, { handlerTimeout: Infinity });
 const session = new Map();
@@ -22,6 +22,7 @@ bot.use(ensureSubscribed);
 bot.on('callback_query', async (ctx) => {
     const data = ctx.callbackQuery?.data || '';
     try {
+        if (data.startsWith('mpage|')) return buttonMusicPager(ctx);
         if (data.startsWith('music|')) await buttonMusic(ctx, data, bot); // clear loading state
         if (data.startsWith('yt|')) return await handleYoutubeChoice(ctx, data, bot);
         if (data === 'buy_premium') return ctx.reply('Premium sotib olish tez orada…', premiumCTA());

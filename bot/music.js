@@ -1,12 +1,40 @@
-// bot/music.js
-import { searchItunesSongs } from '../music/itunes.js';
-import { downloadMp3ByQuery } from '../music/download.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
-import path from 'node:path';
 import { Pool } from 'pg';
+import { downloadMp3ByQuery } from '../music/download.js';
+import { searchItunesSongs } from '../music/itunes.js';
+
+const PAGE_SIZE = 6;
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const musicSearchCache = new Map();
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+function pagesCount(items) { return Math.max(1, Math.ceil(items.length / PAGE_SIZE)); }
+
+function cleanupMusicCache() {
+    const now = Date.now();
+    for (const [k, v] of musicSearchCache) if (v.exp < now) musicSearchCache.delete(k);
+}
+
+function buildKeyboardForPage(items, token, page) {
+    const total = pagesCount(items);
+    const p = Math.min(Math.max(1, page), total);
+    const start = (p - 1) * PAGE_SIZE;
+    const slice = items.slice(start, start + PAGE_SIZE);
+
+    const rows = slice.map(r => ([
+        { text: `🎵 ${r.title} — ${r.artist}`, callback_data: `music|${r.external_id}` }
+    ]));
+
+    // pastgi ⬅️ / ➡️ navigatsiya
+    const nav = [];
+    if (p > 1) nav.push({ text: '⬅️', callback_data: `mpage|${token}|${p - 1}` });
+    if (p < total) nav.push({ text: '➡️', callback_data: `mpage|${token}|${p + 1}` });
+    if (nav.length) rows.push(nav);
+
+    return { rows, page: p, total };
+}
 
 function makeTrackKey({ title, artist, duration_sec, kbps }) {
     const s = `${(artist || '').toLowerCase()}|${(title || '').toLowerCase()}|${duration_sec || 0}|${kbps || 0}`;
@@ -76,28 +104,73 @@ export async function buttonMusic(ctx, data, bot) {
     }
 }
 
-export async function registerMusicHandlers(ctx) {
+export async function buttonMusicPager(ctx) {
+    const data = ctx.callbackQuery?.data || '';
+    if (!data.startsWith('mpage|')) return false; // boshqa handlerlarga qoldiramiz
 
+    const [, token, pageStr] = data.split('|');
+    const state = musicSearchCache.get(token);
+
+    if (!state || state.userId !== ctx.from.id || Date.now() > state.exp) {
+        await ctx.answerCbQuery('Vaqti o‘tgan. Qaytadan qidiring.', { show_alert: true });
+        return true;
+    }
+
+    const page = Number(pageStr) || 1;
+    const { rows, page: p, total } = buildKeyboardForPage(state.items, token, page);
+
+    // matn + klaviaturani yangilaymiz
+    try {
+        await ctx.editMessageText(headerForPage(state.query, p, total), {
+            reply_markup: { inline_keyboard: rows }
+        });
+    } catch {
+        // "message is not modified" bo‘lsa faqat markupni yangilaymiz
+        await ctx.editMessageReplyMarkup({ inline_keyboard: rows }).catch(() => { });
+    }
+    await ctx.answerCbQuery();
+    return true;
+}
+
+function headerForPage(q, page, total) {
+    const qq = (q || '').trim();
+    const short = qq.length > 60 ? qq.slice(0, 57) + '…' : qq;
+    // agar (page/total) ko‘rinmasin desangiz, oxirini olib tashlaysiz
+    return `🎵 “${short}” bo‘yicha taronalar (${page}/${total}):`;
+}
+
+export async function registerMusicHandlers(ctx) {
     const q = ctx.message.text.trim();
     if (!q) return;
 
-    const results = await searchItunesSongs(q, 6);
+    // ko‘proq natija olib, keyin sahifalaymiz
+    const results = await searchItunesSongs(q, 30);
     if (!results.length) return ctx.reply('Hech narsa topilmadi.');
 
-    // natijalarni tugmalar bilan chiqazamiz
-    const rows = results.map(r => ([
-        { text: `🎵 ${r.title} — ${r.artist}`, callback_data: `music|${r.external_id}` }
-    ].filter(Boolean)));
+    // token yaratamiz (callback_data 64 baytdan oshmaydi)
+    const token = crypto.createHash('sha1')
+        .update(`${ctx.from.id}|${q}|${Date.now()}`).digest('hex').slice(0, 12);
 
-    // cache tracks jadvaliga (best-effort)
+    musicSearchCache.set(token, {
+        userId: ctx.from.id,
+        query: q,
+        items: results,
+        exp: Date.now() + CACHE_TTL_MS
+    });
+    cleanupMusicCache();
+
+    // tracks jadvaliga best-effort kech saqlash (o‘zingizdagi kod saqlanadi)
     for (const r of results) {
         pool.query(
             `INSERT INTO tracks(source, query, external_id, title, artist, album, duration_sec, thumb_url)
-           VALUES('itunes',$1,$2,$3,$4,$5,$6,$7)
-         ON CONFLICT DO NOTHING`,
+            VALUES('itunes',$1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,
             [q, r.external_id, r.title, r.artist, r.album, r.duration_sec, r.thumb_url]
         ).catch(() => { });
     }
 
-    await ctx.reply('Natijalar:', { reply_markup: { inline_keyboard: rows } });
+    // 1-sahifa
+    const { rows, page, total } = buildKeyboardForPage(results, token, 1);
+    await ctx.reply(headerForPage(q, page, total), {
+        reply_markup: { inline_keyboard: rows }
+    });
 }
