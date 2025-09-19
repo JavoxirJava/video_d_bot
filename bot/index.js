@@ -60,6 +60,12 @@ bot.on('message', async (ctx) => {
     }
 });
 
+// voice kelganda shu handlerni chaqiring
+bot.on('voice', (ctx) => handleVoiceMusic(ctx, bot));
+// (ixtiyoriy) audio fayl yuborilganda ham ishlatish:
+bot.on('audio', (ctx) => handleVoiceMusic(ctx, bot));
+
+
 (async function main() {
     await migrate();
     await bot.launch();

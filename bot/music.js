@@ -1,3 +1,4 @@
+import { recognizeFree } from '../music/recognize_free.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import { Pool } from 'pg';
@@ -173,4 +174,81 @@ export async function registerMusicHandlers(ctx) {
     await ctx.reply(headerForPage(q, page, total), {
         reply_markup: { inline_keyboard: rows }
     });
+}
+/**
+ * Voice message (OGG/OPUS) → bepul ident → natijalar ro‘yxati
+ * Har bosqichda status edit bo‘ladi. Topilmasa Premium CTA.
+ */
+export async function handleVoiceMusic(ctx, bot) {
+    // 1) Telegram faylini yuklab olamiz
+    const voice = ctx.message?.voice || ctx.message?.audio;
+    if (!voice) return;
+    const fileId = voice.file_id;
+    const file = await ctx.telegram.getFile(fileId);
+    const url = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
+
+    const tmpIn = path.join('/tmp', `v_${Date.now()}_${Math.random().toString(36).slice(2)}.oga`);
+    const status = await ctx.reply('📥 Ovoz qabul qilindi. Yuklab olinmoqda…');
+
+    async function edit(txt, extra = {}) {
+        try {
+            await ctx.telegram.editMessageText(
+                ctx.chat.id,
+                status.message_id,
+                undefined,
+                txt,
+                extra
+            );
+        } catch { }
+    }
+
+    try {
+        // download
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`tg file http ${res.status}`);
+        const buf = Buffer.from(await res.arrayBuffer());
+        await fs.writeFile(tmpIn, buf);
+
+        await edit('🧪 Tahlil boshlanmoqda…');
+
+        // 2) Free tanib olish
+        const results = await recognizeFree(tmpIn, async (t) => edit(t));
+
+        if (!results.length) {
+            // topilmadi → Premium CTA
+            const kb = {
+                inline_keyboard: [
+                    [{ text: '🔁 Qayta urinish', callback_data: 'music_retry' }],
+                    [{ text: '🔍 Premium bilan kengroq qidirish', callback_data: 'buy_premium' }]
+                ]
+            };
+            await edit('Topilmadi. 10–15s balandroq/aniqroq parcha yuboring.', { reply_markup: kb });
+            return;
+        }
+
+        // 3) Natijalarni tugmalar bilan ko‘rsatamiz (itunes qidiruvidagi kabi)
+        const rows = results.map(r => ([
+            { text: `🎵 ${r.title} — ${r.artist}`, callback_data: `music|${r.external_id || crypto.randomUUID()}` }
+        ]));
+
+        // tracks jadvaliga (best-effort)
+        for (const r of results) {
+            ctx.telegram; // no-op to keep linter happy if pool missing
+            try {
+                await pool.query(
+                    `INSERT INTO tracks(source, query, external_id, title, artist, album, duration_sec, thumb_url)
+           VALUES('acoustid',$1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT DO NOTHING`,
+                    ['voice', r.external_id || null, r.title, r.artist, r.album || null, r.duration_sec || null, null]
+                );
+            } catch { }
+        }
+
+        await edit('Natijalar:', { reply_markup: { inline_keyboard: rows } });
+    } catch (e) {
+        console.error('voice recognize error:', e?.stderr || e);
+        await edit('Xatolik. Keyinroq urinib ko‘ring.');
+    } finally {
+        fs.unlink(tmpIn).catch(() => { });
+    }
 }
