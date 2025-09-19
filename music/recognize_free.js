@@ -4,6 +4,8 @@ import path from 'node:path';
 
 const FFMPEG = process.env.FFMPEG_PATH || '/usr/bin/ffmpeg';
 const FP = process.env.FPCALC_PATH || '/usr/bin/fpcalc';
+const FFPROBE = process.env.FFPROBE_PATH || '/usr/bin/ffprobe';
+
 const ACOUSTID_KEY = process.env.ACOUSTID_API_KEY;
 const SNIPPET_SEC = 12;
 
@@ -18,9 +20,9 @@ function sh(cmd, args, opts = {}) {
 
 export async function probeDurationSec(inPath) {
     const { stdout } = await sh(
-        process.env.FFPROBE_PATH || 'ffprobe',
-        ['-v', 'error', '-show_entries', 'format=duration', '-of',
-            'default=noprint_wrappers=1:nokey=1', inPath]
+        FFPROBE,
+        ['-v', 'error', '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1', inPath]
     );
     const v = parseFloat(String(stdout).trim());
     return Number.isFinite(v) ? v : 0;
@@ -30,7 +32,7 @@ async function makeSnippet(inPath, outPath, ss, t = SNIPPET_SEC) {
     const args = [
         '-y', '-ss', String(Math.max(0, ss)), '-t', String(t),
         '-i', inPath,
-        '-vn', '-ac', '1', '-ar', '16000',
+        '-vn', '-ac', '1', '-ar', '44100',
         '-f', 'wav',
         outPath
     ];
@@ -38,8 +40,8 @@ async function makeSnippet(inPath, outPath, ss, t = SNIPPET_SEC) {
     return outPath;
 }
 
-async function fpcalcJson(wavPath) {
-    const { stdout } = await sh(FP, ['-json', '-length', String(SNIPPET_SEC), wavPath]);
+async function fpcalcJson(wavPath, lengthSec = SNIPPET_SEC) {
+    const { stdout } = await sh(FP, ['-json', '-length', String(Math.round(lengthSec)), wavPath]);
     return JSON.parse(stdout);
 }
 
@@ -50,18 +52,19 @@ async function acoustIdIdentify(fingerprint, durationSec) {
         client: ACOUSTID_KEY,
         duration: String(Math.round(durationSec || SNIPPET_SEC)),
         fingerprint,
-        meta: 'recordings+releasegroups+compress'
+        meta: 'recordings+releasegroups+compress',
+        format: 'json'
     });
 
     // Helper: bitta urinish (POST)
     const doPost = async (url) => {
-        const res = await fetch(url, {
+        const res = await (globalThis.fetch ?? (await import('node-fetch')).default)(url, {
             method: 'POST',
             headers: {
                 // Ba’zi konfiguratsiyalarda shu headerlar shart bo‘ladi:
                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                 'Accept': 'application/json',
-                'User-Agent': 'video-bot/1.0 (+https://example.com)'
+                'User-Agent': 'video-d-bot/1.0 (+mailto:javoxir8177@gmail.com)'
             },
             body: form
         });
@@ -71,10 +74,7 @@ async function acoustIdIdentify(fingerprint, durationSec) {
             err.responseText = text;
             throw err;
         }
-        try { return JSON.parse(text); } catch {
-            // ehtiyot uchun
-            return JSON.parse('{}');
-        }
+        try { return JSON.parse(text); } catch { return {}; }
     };
 
     // 1) asosiy endpoint (POST, no trailing slash)
@@ -88,17 +88,19 @@ async function acoustIdIdentify(fingerprint, durationSec) {
             } catch (e2) {
                 // 3) yana 404 bo‘lsa GET-query fallback (oxirgi chora)
                 if (String(e2.message).includes('404')) {
-                    const url = new URL('https://api.acoustid.org/v2/identify');
+                    // oxirgi chora: /lookup (GET)
+                    const url = new URL('https://api.acoustid.org/v2/lookup');
                     url.searchParams.set('client', ACOUSTID_KEY);
                     url.searchParams.set('duration', String(Math.round(durationSec || SNIPPET_SEC)));
                     url.searchParams.set('meta', 'recordings+releasegroups+compress');
+                    url.searchParams.set('format', 'json');
                     url.searchParams.set('fingerprint', fingerprint);
 
-                    const res = await fetch(url.toString(), {
+                    const res = await (globalThis.fetch ?? (await import('node-fetch')).default)(url.toString(), {
                         method: 'GET',
                         headers: {
                             'Accept': 'application/json',
-                            'User-Agent': 'video-bot/1.0 (+https://example.com)'
+                            'User-Agent': 'video-d-bot/1.0 (+mailto:javoxir8177@gmail.com)'
                         }
                     });
                     const text = await res.text();
@@ -168,9 +170,11 @@ export async function recognizeFree(inPath, onStatus = async () => { }) {
         const pos = Math.max(0, Math.floor(positions[i]));
         await onStatus(`🎧 Snippet ${i + 1}/${positions.length} (${pos}s) tayyorlanmoqda…`);
         const wav = path.join(tmpdir, `snippet_${Date.now()}_${i}.wav`);
-        await makeSnippet(inPath, wav, pos);
+        // mavjud qismdan chiqib ketmaslik uchun uzunlikni moslaymiz
+        const len = Math.max(4, Math.min(SNIPPET_SEC, (dur ? (dur - pos - 0.2) : SNIPPET_SEC)));
+        await makeSnippet(inPath, wav, pos, len);
         await onStatus(`🔎 Snippet ${i + 1}: fingerprint…`);
-        const fpj = await fpcalcJson(wav);
+        const fpj = await fpcalcJson(wav, len);
         await fs.unlink(wav).catch(() => { });
         const fp = fpj?.fingerprint;
         const dd = fpj?.duration || SNIPPET_SEC;
@@ -180,7 +184,7 @@ export async function recognizeFree(inPath, onStatus = async () => { }) {
         const mapped = mapAcoustIdResults(json);
         if (mapped.length) best = best.length ? best : mapped; // birinchi muvaffaqiyat
         // “yaxshi match” bo‘lsa to‘xtatamiz
-        if (mapped[0]?.score >= 0.65) {
+        if (mapped[0]?.score >= 0.70) {
             best = mapped;
             break;
         }
