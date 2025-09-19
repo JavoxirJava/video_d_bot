@@ -20,7 +20,7 @@ bot.use(ensureSubscribed);
 bot.on('callback_query', async (ctx) => {
     const data = ctx.callbackQuery?.data || '';
     try {
-        if (data.startsWith('yt|')) return await handleYoutubeChoice(ctx, data);
+        if (data.startsWith('yt|')) return await handleYoutubeChoice(ctx, data, bot);
         if (data === 'buy_premium') return ctx.reply('Premium sotib olish tez orada…', premiumCTA());
         if (data === 'menu_video') return ctx.reply('Link yuboring.');
         if (data === 'menu_music') return ctx.reply('Musiqa qidirish tez orada…');

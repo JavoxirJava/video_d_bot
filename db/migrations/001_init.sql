@@ -73,3 +73,29 @@ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- helpful index
 CREATE INDEX IF NOT EXISTS idx_video_files_pid_fmt ON video_files (platform, video_id, format_key);
+
+
+---------------------------------- Musica qismi ----------------------------------
+-- 1) Qidiruv natijalari (kesh). iTunes trackId yoki ISRC saqlab qo'yamiz.
+CREATE TABLE IF NOT EXISTS tracks (
+  id BIGSERIAL PRIMARY KEY,
+  source        VARCHAR(20) NOT NULL,   -- 'itunes' | 'acr' | 'manual'
+  query         TEXT,                   -- matnli qidiruv / fingerprint
+  external_id   TEXT,                   -- iTunes trackId yoki ISRC
+  title         TEXT,
+  artist        TEXT,
+  album         TEXT,
+  duration_sec  INT,
+  thumb_url     TEXT,
+  created_at    TIMESTAMP DEFAULT now()
+);
+
+-- 2) Tayyor MP3 fayllar (Telegram file_id orqali tez qaytarish)
+CREATE TABLE IF NOT EXISTS track_files (
+  id BIGSERIAL PRIMARY KEY,
+  track_key       TEXT UNIQUE,          -- mas: sha1(lower(title)|lower(artist)|duration|kbps)
+  filesize        BIGINT,
+  bitrate_kbps    INT,
+  telegram_file_id TEXT,
+  created_at      TIMESTAMP DEFAULT now()
+);

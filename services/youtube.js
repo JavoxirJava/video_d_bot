@@ -41,7 +41,8 @@ export async function askYoutubeFormat(ctx, url) {
     );
 }
 
-export async function handleYoutubeChoice(ctx, data) {
+export async function handleYoutubeChoice(ctx, data, bot) {
+    const loadingMsg = await ctx.answerCbQuery('Yuklanmoqda…');
     console.log('YT choice data:', data);
     const [, video_id, hPart] = data.split('|');
     const height = Number((hPart?.split(':')[1] || '').trim());
@@ -57,6 +58,7 @@ export async function handleYoutubeChoice(ctx, data) {
     const cached = await getVideoFile({ platform: 'youtube', video_id, format_key: fkey });
     if (cached?.telegram_file_id) {
         await ctx.answerCbQuery('Keshdan');
+        await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id);
         return ctx.replyWithVideo(
             cached.telegram_file_id,
             { supports_streaming: true, caption: `YouTube ${height}p` }
@@ -64,6 +66,8 @@ export async function handleYoutubeChoice(ctx, data) {
     }
 
     await ctx.answerCbQuery('Yuklanmoqda…');
+    const msg = await bot.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, `⌛ YouTube: ${height}p tayyorlanmoqda…`);
+
 
     const watchUrl = `https://www.youtube.com/watch?v=${video_id}`;
     const outPath = `/tmp/${video_id}_${height}.mp4`;
@@ -80,22 +84,21 @@ export async function handleYoutubeChoice(ctx, data) {
         { source: outPath, filename: `${video_id}_${height}p.mp4` },
         { supports_streaming: true, caption: `YouTube ${height}p` }
     );
+    ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id);
 
     const file_id = sent?.video?.file_id || sent?.document?.file_id;
-    if (file_id) {
-        await saveVideoFile({
-            platform: 'youtube',
-            video_id,
-            format_key: fkey,
-            height,
-            width: null,
-            ext: 'mp4',
-            itag: null,
-            abr_kbps: null,
-            filesize: sent?.video?.file_size || null,
-            telegram_file_id: file_id
-        });
-    }
+    if (file_id) await saveVideoFile({
+        platform: 'youtube',
+        video_id,
+        format_key: fkey,
+        height,
+        width: null,
+        ext: 'mp4',
+        itag: null,
+        abr_kbps: null,
+        filesize: sent?.video?.file_size || null,
+        telegram_file_id: file_id
+    });
 }
 
 function normHeight(h) {
