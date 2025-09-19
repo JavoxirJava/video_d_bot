@@ -18,9 +18,10 @@ export async function clickMusic(ctx, session) {
     session.set(ctx.from.id, 'musicText');
 }
 
-export async function buttonMusic(ctx, data) {
+export async function buttonMusic(ctx, data, bot) {
 
     const extId = data.split('|')[1];
+    let send = null;
 
     // tracks dan metadata olamiz
     const { rows } = await pool.query(
@@ -44,7 +45,7 @@ export async function buttonMusic(ctx, data) {
             title: t.title, performer: t.artist, caption: `${t.title} — ${t.artist}`
         });
     }
-
+    send = await ctx.reply(`Yuklanmoqda (${kbps} kbps)… Iltimos kuting.`);
     await ctx.answerCbQuery('Yuklanmoqda…');
 
     const tmp = `/tmp/${key}.mp3`;
@@ -56,6 +57,8 @@ export async function buttonMusic(ctx, data) {
             { source: tmp, filename: `${t.artist} - ${t.title}.mp3` },
             { title: t.title, performer: t.artist, caption: `${t.title} — ${t.artist}` }
         );
+
+        ctx.telegram.deleteMessage(ctx.chat.id, send.message_id);
         const fileId = sent?.audio?.file_id || sent?.document?.file_id;
 
         if (fileId) {
@@ -68,7 +71,7 @@ export async function buttonMusic(ctx, data) {
         }
     } catch (e) {
         console.error('MP3 dl error:', e?.stderr || e);
-        await ctx.reply('Yuklab bo‘lmadi. Boshqa natijani sinab ko‘ring.');
+        await await bot.telegram.editMessageText(ctx.chat.id, send.message_id, 'Yuklab bo‘lmadi. Boshqa natijani sinab ko‘ring.');
     } finally {
         fs.unlink(tmp).catch(() => { });
     }
