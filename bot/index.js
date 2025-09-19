@@ -22,7 +22,7 @@ bot.use(ensureSubscribed);
 bot.on('callback_query', async (ctx) => {
     const data = ctx.callbackQuery?.data || '';
     try {
-        if (data.startsWith('mget|')) await buttonMusic(ctx, data); // clear loading state
+        if (data.startsWith('music|')) await buttonMusic(ctx, data, bot); // clear loading state
         if (data.startsWith('yt|')) return await handleYoutubeChoice(ctx, data, bot);
         if (data === 'buy_premium') return ctx.reply('Premium sotib olish tez orada…', premiumCTA());
         if (data === 'menu_video') return ctx.reply('Link yuboring.');
@@ -36,7 +36,6 @@ bot.on('callback_query', async (ctx) => {
 // Text messages: detect URL(s)
 bot.on('message', async (ctx) => {
     if (!ctx.message?.text) return;
-    console.log(session.get(ctx.from.id));
     if (session.get(ctx.from.id) === 'musicText') {
         registerMusicHandlers(ctx);
         return;

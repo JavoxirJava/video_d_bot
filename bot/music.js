@@ -19,7 +19,6 @@ export async function clickMusic(ctx, session) {
 }
 
 export async function buttonMusic(ctx, data, bot) {
-
     const extId = data.split('|')[1];
     let send = null;
 
@@ -36,6 +35,8 @@ export async function buttonMusic(ctx, data, bot) {
 
     const kbps = ctx.from?.is_premium ? 192 : Number(process.env.MUSIC_FREE_MAX_BITRATE || 128);
     const key = makeTrackKey({ title: t.title, artist: t.artist, duration_sec: t.duration_sec, kbps });
+
+    console.log('Track key:', key, kbps);
 
     // kesh: track_files dan tekshiramiz
     const kq = await pool.query('SELECT * FROM track_files WHERE track_key=$1 LIMIT 1', [key]);
@@ -87,7 +88,7 @@ export async function registerMusicHandlers(ctx) {
 
     // natijalarni tugmalar bilan chiqazamiz
     const rows = results.map(r => ([
-        { text: `🎵 ${r.title} — ${r.artist}`, callback_data: `msel|${r.external_id}` }
+        { text: `🎵 ${r.title} — ${r.artist}`, callback_data: `music|${r.external_id}` }
     ].filter(Boolean)));
 
     // cache tracks jadvaliga (best-effort)
