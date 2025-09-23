@@ -27,7 +27,18 @@ export async function handleInstagram(ctx, url, opts = { tier: 'free' }) {
     await ffmpegTranscodeToH264(tmpRaw, out);
 
     // yuborish
-    const sent = await ctx.replyWithVideo({ source: out, filename: `${video_id}.mp4` }, { supports_streaming: true });
+    const sent = await ctx.replyWithVideo(
+        { source: out, filename: `${video_id}.mp4` },
+        {
+            supports_streaming: true,
+            reply_markup: {
+                inline_keyboard: [[
+                    { text: '🎵 Musiqasini topish', callback_data: `aud|ig|${video_id}` }
+                ]]
+            }
+        }
+    );
+
     const size = sent?.video?.file_size || 0;
 
     if (opts.tier === 'free' && size > 10 * 1024 * 1024) 

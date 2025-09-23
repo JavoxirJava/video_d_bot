@@ -7,7 +7,7 @@ import { mainMenu, premiumCTA } from '../keyboards.js';
 import { ensureSubscribed } from '../middlewares/subscription.js';
 import { handleInstagram } from '../services/instagram.js';
 import { askYoutubeFormat, handleYoutubeChoice } from '../services/youtube.js';
-import { buttonMusic, buttonMusicPager, clickMusic, handleVoiceMusic, registerMusicHandlers } from './music.js';
+import { buttonMusic, buttonMusicPager, clickMusic, handleVoiceMusic, registerMusicHandlers, handleFindMusicFromVideo } from './music.js';
 
 const bot = new Telegraf(process.env.BOT_TOKEN, { handlerTimeout: Infinity });
 const session = new Map();
@@ -25,6 +25,7 @@ bot.on('callback_query', async (ctx) => {
         if (data.startsWith('mpage|')) return buttonMusicPager(ctx);
         if (data.startsWith('music|')) await buttonMusic(ctx, data, bot); // clear loading state
         if (data.startsWith('yt|')) return await handleYoutubeChoice(ctx, data, bot);
+        if (data.startsWith('aud|')) return handleFindMusicFromVideo(ctx, data);
         if (data === 'buy_premium') return ctx.reply('Premium sotib olish tez orada…', premiumCTA());
         if (data === 'menu_video') return ctx.reply('Link yuboring.');
         if (data === 'menu_music') return clickMusic(ctx, session);

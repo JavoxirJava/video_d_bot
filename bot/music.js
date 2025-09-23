@@ -1,4 +1,6 @@
 import { recognizeFree } from '../music/recognize_free.js';
+import { formatKey } from '../common/utils.js';
+import { getVideoFile } from '../repositories/videos.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -251,5 +253,85 @@ export async function handleVoiceMusic(ctx, bot) {
         await edit('Xatolik. Keyinroq urinib ko‘ring.');
     } finally {
         fs.unlink(tmpIn).catch(() => { });
+    }
+}
+
+
+export async function handleFindMusicFromVideo(ctx, data) {
+    // data: aud|ig|<vid>  yoki aud|yt|<vid>|h:720
+    const parts = data.split('|');
+    const platform = parts[1];
+    const video_id = parts[2];
+    const height = parts[3]?.startsWith('h:') ? Number(parts[3].slice(2)) : null;
+
+    if (!platform || !video_id) {
+        return ctx.answerCbQuery('Xato callback', { show_alert: true });
+    }
+
+    // DB’dan telegram_file_id topamiz
+    let fkey;
+    if (platform === 'ig') {
+        fkey = formatKey({ source: 'ig', height: null, ext: 'mp4' });
+    } else if (platform === 'yt' && height) {
+        fkey = formatKey({ source: 'yt', height, ext: 'mp4' });
+    }
+
+    const rec = await getVideoFile({ platform: platform === 'ig' ? 'instagram' : 'youtube', video_id, format_key: fkey });
+    const fileId = rec?.telegram_file_id;
+    if (!fileId) {
+        await ctx.answerCbQuery('Fayl topilmadi', { show_alert: true });
+        return;
+    }
+
+    // foydalanuvchiga jarayonni ko‘rsatamiz
+    const status = await ctx.reply('🎧 Videodagi musiqani qidiryapman…');
+    const onStatus = async (text) => {
+        try {
+            await ctx.telegram.editMessageText(ctx.chat.id, status.message_id, undefined, text);
+        } catch { }
+    };
+
+    // Telegram’dan faylni serverga yuklab olamiz
+    const url = await ctx.telegram.getFileLink(fileId);
+    const tmp = path.join('/tmp', `audsrc_${video_id}_${height || 'na'}.mp4`);
+    try {
+        const res = await fetch(url.href);
+        if (!res.ok) throw new Error(`tg file dl http ${res.status}`);
+        const buf = Buffer.from(await res.arrayBuffer());
+        await fs.writeFile(tmp, buf);
+
+        // Tanib olish
+        const results = await recognizeFree(tmp, onStatus);
+
+        if (!results.length) {
+            await ctx.telegram.editMessageText(
+                ctx.chat.id, status.message_id, undefined,
+                '😔 Musiqa topilmadi.\n\nPremium’da qo‘shimcha qidiruv (lyrics/YouTube) mavjud.'
+            ).catch(() => { });
+            await ctx.reply(
+                '🚀 Premiumni sinab ko‘ring',
+                { reply_markup: { inline_keyboard: [[{ text: '🔥 Premiumga o‘tish', url: 'https://t.me/your_premium_link' }]] } }
+            );
+            return;
+        }
+
+        // Natijalarni tugmalar ko‘rinishida chiqaramiz (senda buttonMusic bor)
+        const rows = results.slice(0, 6).map(r => ([
+            { text: `🎵 ${r.title} — ${r.artist}`, callback_data: `music|${r.external_id}` }
+        ]));
+
+        await ctx.telegram.editMessageText(
+            ctx.chat.id, status.message_id, undefined,
+            '✅ Videodagi musiqalar topildi:'
+        ).catch(() => { });
+
+        await ctx.reply('Tanlang:', { reply_markup: { inline_keyboard: rows } });
+    } catch (e) {
+        console.error('find-music-from-video error:', e);
+        try {
+            await ctx.telegram.editMessageText(ctx.chat.id, status.message_id, undefined, '⚠️ Xatolik. Keyinroq urinib ko‘ring.');
+        } catch { }
+    } finally {
+        fs.unlink(tmp).catch(() => { });
     }
 }

@@ -82,8 +82,17 @@ export async function handleYoutubeChoice(ctx, data, bot) {
 
     const sent = await ctx.replyWithVideo(
         { source: outPath, filename: `${video_id}_${height}p.mp4` },
-        { supports_streaming: true, caption: `YouTube ${height}p` }
+        {
+            supports_streaming: true,
+            caption: `YouTube ${height}p`,
+            reply_markup: {
+                inline_keyboard: [[
+                    { text: '🎵 Musiqasini topish', callback_data: `aud|yt|${video_id}|h:${height}` }
+                ]]
+            }
+        }
     );
+
     ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id);
 
     const file_id = sent?.video?.file_id || sent?.document?.file_id;
