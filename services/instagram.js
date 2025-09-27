@@ -15,10 +15,8 @@ export async function handleInstagram(ctx, url, opts = { tier: 'free' }) {
     // DB kesh
     const fkey = formatKey({ source: 'ig', height: null, ext: 'mp4' });
     const cached = await getVideoFile({ platform: 'instagram', video_id, format_key: fkey });
-    console.log('Cached IG video:', cached);
-    if (cached?.telegram_file_id) {
+    if (cached?.telegram_file_id)
         return ctx.replyWithVideo(cached.telegram_file_id, { supports_streaming: true });
-    }
 
     // 1) RAPIDAPI PROVIDER (birinchi urinish)
     try {

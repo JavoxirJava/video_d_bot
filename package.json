@@ -11,12 +11,13 @@
     "start": "node bot/index.js"
   },
   "dependencies": {
-    "dotenv": "^17.2.2",
-    "pg": "^8.16.3",
-    "telegraf": "^4.16.3",
-    "express": "^4.19.2",
+    "axios": "^1.12.2",
     "bullmq": "^5.8.0",
+    "dotenv": "^17.2.2",
+    "express": "^4.19.2",
     "ioredis": "^5.4.1",
-    "p-queue": "^7.4.1"
+    "p-queue": "^7.4.1",
+    "pg": "^8.16.3",
+    "telegraf": "^4.16.3"
   }
 }

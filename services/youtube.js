@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { formatKey, normalizeUrl } from '../common/utils.js';
-import { ytDownloadByHeightSmart, ytInfo } from '../common/ytdlp.js';
+import { ytDownloadByHeightSmart, ytInfo, ffmpegTranscodeToH264 } from '../common/ytdlp.js';
 import { ytFormatsKeyboard } from '../keyboards.js';
 import { getVideoFile, saveVideoFile, upsertVideo } from '../repositories/videos.js';
 
@@ -17,13 +17,12 @@ export async function askYoutubeFormat(ctx, url) {
         thumb_url: info?.thumbnail
     });
 
-    // Mavjud formatlardan balandliklarni yig‘amiz (10 tagacha)
     const heights = Array.from(
         new Set(
             (info.formats || [])
                 .map(f => f.height)
                 .filter(h => typeof h === 'number' && h > 0)
-                .map(h => normHeight(h)) // pastdagi helper
+                .map(h => normHeight(h))
         )
     ).sort((a, b) => a - b).slice(0, 6);
 
@@ -31,7 +30,6 @@ export async function askYoutubeFormat(ctx, url) {
 
     const buttons = heights.map(h => ({
         label: `${h}p`,
-        // ⚠️ qisqa data, 64 baytdan oshmaydi
         data: `yt|${video_id}|h:${h}`
     }));
 
@@ -41,8 +39,7 @@ export async function askYoutubeFormat(ctx, url) {
     );
 }
 
-export async function handleYoutubeChoice(ctx, data, bot) {
-    await ctx.answerCbQuery('Yuklanmoqda…');
+export async function handleYoutubeChoice(ctx, data) {
     console.log('YT choice data:', data);
     const [, video_id, hPart] = data.split('|');
     const height = Number((hPart?.split(':')[1] || '').trim());
@@ -54,57 +51,80 @@ export async function handleYoutubeChoice(ctx, data, bot) {
     const fkey = formatKey({ source: 'yt', height, ext: 'mp4' });
     console.log('YT choice:', { video_id, height, fkey });
 
-    // 1) kesh
+    // DB cache
     const cached = await getVideoFile({ platform: 'youtube', video_id, format_key: fkey });
     if (cached?.telegram_file_id) {
         await ctx.answerCbQuery('Keshdan');
-        return ctx.replyWithVideo(
+        await ctx.replyWithVideo(
             cached.telegram_file_id,
             { supports_streaming: true, caption: `YouTube ${height}p` }
         );
+        return;
     }
-
+    // Callbackga zudlik bilan javob — 400/timeout’ni oldini oladi
     await ctx.answerCbQuery('Yuklanmoqda…');
+
+    // Holat matni (keyin edit qilamiz)
+    const statusMsg = await ctx.reply(`⌛ YouTube: ${height}p tayyorlanmoqda…`);
 
     const watchUrl = `https://www.youtube.com/watch?v=${video_id}`;
     const outPath = `/tmp/${video_id}_${height}.mp4`;
+    const fixedPath = `/tmp/${video_id}_${height}_fixed.mp4`;
 
     try {
+        // 1) Yuklab olish (smart tanlov)
         await ytDownloadByHeightSmart(watchUrl, height, outPath);
-    } catch (e) {
-        console.error('YT smart download failed:', e?.stderr || e);
-        await ctx.answerCbQuery('Format topilmadi. Boshqa sifatni tanlab ko‘ring.', { show_alert: true });
-        return;
-    }
 
-    const sent = await ctx.replyWithVideo(
-        { source: outPath, filename: `${video_id}_${height}p.mp4` },
-        {
-            supports_streaming: true,
-            caption: `YouTube ${height}p`,
-            reply_markup: {
-                inline_keyboard: [[
-                    { text: '🎵 Musiqasini topish', callback_data: `aud|yt|${video_id}|h:${height}` }
-                ]]
-            }
+        // 2) SAR/DAR normalizatsiya (ensiz/kvadrat muammosi uchun)
+        //    H.264 + yuv420p + setsar=1 + faststart (telegram playback uchun muhim)
+        await ffmpegTranscodeToH264(outPath, fixedPath);
+
+        // 3) Yuborish
+        const sent = await ctx.replyWithVideo(
+            { source: fixedPath, filename: `${video_id}_${height}p.mp4` },
+            { supports_streaming: true, caption: `YouTube ${height}p` }
+        );
+
+        // 4) Cache saqlash
+        const file_id = sent?.video?.file_id || sent?.document?.file_id;
+        if (file_id) {
+            await saveVideoFile({
+                platform: 'youtube',
+                video_id,
+                format_key: fkey,
+                height,
+                width: null,
+                ext: 'mp4',
+                itag: null,
+                abr_kbps: null,
+                filesize: sent?.video?.file_size || null,
+                telegram_file_id: file_id
+            });
         }
-    );
+        // Holatni tozalash
+        try { await ctx.deleteMessage(statusMsg.message_id); } catch { }
+    } catch (e) {
+        console.error('YT download/transcode error:', e?.stderr || e?.message || e);
 
-    ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id);
-
-    const file_id = sent?.video?.file_id || sent?.document?.file_id;
-    if (file_id) await saveVideoFile({
-        platform: 'youtube',
-        video_id,
-        format_key: fkey,
-        height,
-        width: null,
-        ext: 'mp4',
-        itag: null,
-        abr_kbps: null,
-        filesize: sent?.video?.file_size || null,
-        telegram_file_id: file_id
-    });
+        // Foydalanuvchiga ko‘rinadigan tushunarli xabar
+        try {
+            await ctx.editMessageText?.(`Xatolik: formatni olishning iloji bo‘lmadi. Boshqa sifatni tanlab ko‘ring.`);
+        } catch { }
+        try {
+            await ctx.answerCbQuery('Xatolik', { show_alert: true });
+        } catch { }
+        try {
+            await ctx.editMessageText?.(`Xatolik: formatni olishning iloji bo‘lmadi. Boshqa sifatni tanlab ko‘ring.`, {
+                chat_id: ctx.chat.id,
+                message_id: statusMsg?.message_id
+            });
+        } catch { }
+    } finally {
+        // Tozalash
+        const fs = await import('node:fs/promises');
+        fs.unlink(outPath).catch(() => { });
+        fs.unlink(fixedPath).catch(() => { });
+    }
 }
 
 function normHeight(h) {
