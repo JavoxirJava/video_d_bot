@@ -42,7 +42,7 @@ export async function askYoutubeFormat(ctx, url) {
 }
 
 export async function handleYoutubeChoice(ctx, data, bot) {
-    const loadingMsg = await ctx.answerCbQuery('Yuklanmoqda…');
+    await ctx.answerCbQuery('Yuklanmoqda…');
     console.log('YT choice data:', data);
     const [, video_id, hPart] = data.split('|');
     const height = Number((hPart?.split(':')[1] || '').trim());
@@ -58,7 +58,6 @@ export async function handleYoutubeChoice(ctx, data, bot) {
     const cached = await getVideoFile({ platform: 'youtube', video_id, format_key: fkey });
     if (cached?.telegram_file_id) {
         await ctx.answerCbQuery('Keshdan');
-        await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id);
         return ctx.replyWithVideo(
             cached.telegram_file_id,
             { supports_streaming: true, caption: `YouTube ${height}p` }
@@ -66,8 +65,6 @@ export async function handleYoutubeChoice(ctx, data, bot) {
     }
 
     await ctx.answerCbQuery('Yuklanmoqda…');
-    const msg = await bot.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, `⌛ YouTube: ${height}p tayyorlanmoqda…`);
-
 
     const watchUrl = `https://www.youtube.com/watch?v=${video_id}`;
     const outPath = `/tmp/${video_id}_${height}.mp4`;
