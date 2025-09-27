@@ -85,10 +85,12 @@ export async function igDownloadRaw(url, outPath) {
 }
 
 export async function ffmpegTranscodeToH264(inPath, outPath) {
-    // CLI’da ishlagan konfiguratsiya: H.264 + AAC + faststart
     const args = [
-        '-y',                 // overwrite
+        '-y',
         '-i', inPath,
+        // SAR/DAR muammolarini yo‘qotish
+        '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1',
+        // H.264 + AAC + faststart
         '-c:v', 'libx264',
         '-preset', 'veryfast',
         '-crf', '23',
@@ -97,7 +99,6 @@ export async function ffmpegTranscodeToH264(inPath, outPath) {
         '-movflags', '+faststart',
         outPath
     ];
-    log('[ffmpeg transcode] in → out:', inPath, '→', outPath);
     await new Promise((resolve, reject) => {
         execFile(FFMPEG, args, { maxBuffer: 64e6 }, (err, stdout, stderr) => {
             if (err) { err.stderr = stderr; return reject(err); }
