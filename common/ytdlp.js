@@ -89,13 +89,15 @@ export async function ffmpegTranscodeToH264(inPath, outPath) {
     const args = [
         '-y',
         '-i', inPath,
-        '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1',
+        // O‘lchamni saqlaymiz, faqat SAR=1 va juft pikselga tekislaymiz
+        '-vf', 'setsar=1,scale=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p',
         '-c:v', 'libx264',
         '-preset', 'veryfast',
         '-crf', '23',
-        '-pix_fmt', 'yuv420p',
         '-c:a', 'aac',
         '-movflags', '+faststart',
+        // rotate/displaymatrix metadatasini yo‘qotib, “asosiy” orientatsiyada saqlash
+        '-metadata:s:v:0', 'rotate=0',
         outPath
     ];
     await new Promise((resolve, reject) => {
@@ -126,36 +128,34 @@ export async function ytDownloadByHeightSmart(url, height, outPath) {
         ['--extractor-args', 'youtube:player_client=ios'],
     ];
 
-    const primaryFmt = (height <= 360)
-        ? ['-f', `b[ext=mp4][vcodec*=avc1][height<=${height}]/b[ext=mp4][height<=${height}]`]
-        : ['-f', 'bv*+ba/b', '-S', `res:${height},ext:mp4,vcodec:avc1,acodec:m4a`];
+    // 1) Har doim avval DASH (video+audio) – H.264/M4A ga preferensiya
+    const dashPreferH264 = ['-f', 'bv*+ba/b', '-S', `res:${height},vcodec:avc1,acodec:m4a,ext:mp4`];
 
-    const fallback1 = ['-f', 'bv*+ba/b', '-S', `res:${height}`];
-    const fallback2 = ['-f', `best[height<=${height}]`, '--recode-video', 'mp4'];
+    // 2) DASH – codec cheklovisiz (faqat resolyutsiya bo‘yicha), keyin mp4 ga recode
+    const dashAnyRecode = ['-f', 'bv*+ba/b', '-S', `res:${height}`, '--recode-video', 'mp4'];
+
+    // 3) Progressive faqat oxirgi chora sifatida
+    const progressiveLast = ['-f', `b[ext=mp4][height<=${height}]/b[height<=${height}]`];
 
     let lastErr;
     for (const c of clients) {
         try {
-            console.log('[YT smart try]', [...ytCookieArgs(), ...c, ...primaryFmt, ...common, url].join(' '));
-            await execYtDlp([...ytCookieArgs(), ...c, ...primaryFmt, ...common, url], { timeout: 120000 });
+            console.log('[YT smart try A]', [...ytCookieArgs(), ...c, ...dashPreferH264, ...common, url].join(' '));
+            await execYtDlp([...ytCookieArgs(), ...c, ...dashPreferH264, ...common, url], { timeout: 120000 });
             return;
-        } catch (e) {
-            lastErr = e; console.error('YT primary failed:', e?.stderr || e);
-        }
+        } catch (e) { lastErr = e; console.error('YT A failed:', e?.stderr || e); }
+
         try {
-            console.log('[YT smart try F1]', [...ytCookieArgs(), ...c, ...fallback1, ...common, url].join(' '));
-            await execYtDlp([...ytCookieArgs(), ...c, ...fallback1, ...common, url], { timeout: 150000 });
+            console.log('[YT smart try B]', [...ytCookieArgs(), ...c, ...dashAnyRecode, ...common, url].join(' '));
+            await execYtDlp([...ytCookieArgs(), ...c, ...dashAnyRecode, ...common, url], { timeout: 150000 });
             return;
-        } catch (e) {
-            lastErr = e; console.error('YT fallback1 failed:', e?.stderr || e);
-        }
+        } catch (e) { lastErr = e; console.error('YT B failed:', e?.stderr || e); }
+
         try {
-            console.log('[YT smart try F2]', [...ytCookieArgs(), ...c, ...fallback2, ...common, url].join(' '));
-            await execYtDlp([...ytCookieArgs(), ...c, ...fallback2, ...common, url], { timeout: 180000 });
+            console.log('[YT smart try C]', [...ytCookieArgs(), ...c, ...progressiveLast, ...common, url].join(' '));
+            await execYtDlp([...ytCookieArgs(), ...c, ...progressiveLast, ...common, url], { timeout: 180000 });
             return;
-        } catch (e) {
-            lastErr = e; console.error('YT fallback2 failed:', e?.stderr || e);
-        }
+        } catch (e) { lastErr = e; console.error('YT C failed:', e?.stderr || e); }
     }
     throw lastErr || new Error('yt-dlp selection failed');
 }
