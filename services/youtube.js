@@ -61,11 +61,9 @@ export async function handleYoutubeChoice(ctx, data) {
         );
         return;
     }
-    // Callbackga zudlik bilan javob — 400/timeout’ni oldini oladi
-    await ctx.answerCbQuery('Yuklanmoqda…');
-
-    // Holat matni (keyin edit qilamiz)
-    const statusMsg = await ctx.reply(`⌛ YouTube: ${height}p tayyorlanmoqda…`);
+    
+    await ctx.answerCbQuery('Yuklanmoqda…');       // callback timeout’ni oldini oladi
+    const statusMsg = await ctx.reply(`⌛ YouTube: ${height}p tayyorlanmoqda…`); // keyin delete qilamiz
 
     const watchUrl = `https://www.youtube.com/watch?v=${video_id}`;
     const outPath = `/tmp/${video_id}_${height}.mp4`;

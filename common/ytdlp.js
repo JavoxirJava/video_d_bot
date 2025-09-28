@@ -28,21 +28,22 @@ export function igCookieArgs() {
     return [];
 }
 
-function baseArgs() { return ['-4', '--no-warnings', '--no-check-certificates', '--no-playlist', '--ffmpeg-location', FFMPEG]; }
+function baseArgs() {
+    return ['-4', '--no-warnings', '--no-check-certificates', '--no-playlist', '--ffmpeg-location', FFMPEG];
+}
 
 export function execYtDlp(args, opts = {}) {
     return new Promise((resolve, reject) => {
-        // execFile(YTDLP, [...baseArgs(), ...args], { maxBuffer: 256e6, timeout: 300000, ...opts }, (err, stdout, stderr) => {
         execFile(
             YTDLP,
             [...baseArgs(), ...args],
-            { maxBuffer: 256e6, timeout: 300000, ...opts }, // 256MB, 5 min
+            // qat’iyroq timeout beramiz (override qilsa bo‘ladi)
+            { maxBuffer: 256e6, timeout: 300000, ...opts },
             (err, stdout, stderr) => {
                 if (err) { err.stderr = stderr; return reject(err); }
                 resolve({ stdout, stderr });
             }
         );
-        // });
     });
 }
 
@@ -88,9 +89,7 @@ export async function ffmpegTranscodeToH264(inPath, outPath) {
     const args = [
         '-y',
         '-i', inPath,
-        // SAR/DAR muammolarini yo‘qotish
         '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1',
-        // H.264 + AAC + faststart
         '-c:v', 'libx264',
         '-preset', 'veryfast',
         '-crf', '23',
@@ -108,69 +107,63 @@ export async function ffmpegTranscodeToH264(inPath, outPath) {
 }
 
 export async function ytDownloadByHeightSmart(url, height, outPath) {
-    // 1) bir nechta player_client bilan urinib chiqamiz
-    const clientVariants = [
-        [], // default (web)
+    // tezroq va barqaror ishlashi uchun umumiy flaglar
+    const common = [
+        '--add-header', 'Referer: https://www.youtube.com/',
+        '--no-continue',
+        '--force-overwrites',
+        '-N', '4',
+        '--concurrent-fragments', '8',
+        '-o', outPath,
+        '--merge-output-format', 'mp4',
+        '--postprocessor-args', 'ffmpeg:-movflags +faststart'
+    ];
+
+    // turli player_client’lar
+    const clients = [
+        [], // default
         ['--extractor-args', 'youtube:player_client=web_safari'],
         ['--extractor-args', 'youtube:player_client=web'],
         ['--extractor-args', 'youtube:player_client=android'],
         ['--extractor-args', 'youtube:player_client=ios'],
     ];
+    // past sifatlarda (≤360p) avval progressive MP4 ni sinash foydali
+    const primaryFmt = (height <= 360)
+        ? ['-f', `b[ext=mp4][vcodec*=avc1][height<=${height}]/b[ext=mp4][height<=${height}]`]
+        : ['-f', 'bv*+ba/b', '-S', `res:${height},ext:mp4,vcodec:avc1,acodec:m4a`];
 
-    // 2) uchta format strategiyasi:
-    // A) mux (video+audio): bv*+ba/b   va mp4/h264/m4a'ga preferensiya
-    const stratA = (extra) => ([
-        ...extra,
-        ...ytCookieArgs(),
-        '--add-header', 'Referer: https://www.youtube.com/',
-        '-f', 'bv*+ba/b',
-        '-S', `res:${height},ext:mp4,vcodec:avc1,acodec:m4a`,
-        '-o', outPath,
-        '--merge-output-format', 'mp4',
-        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
-    ]);
-
-    // B) faqat progressive (b) — ba’zi roliklarda shartli mavjud
-    const stratB = (extra) => ([
-        ...extra,
-        ...ytCookieArgs(),
-        '--add-header', 'Referer: https://www.youtube.com/',
-        '-f', 'b',
-        '-S', `res:${height},ext:mp4`,
-        '-o', outPath,
-        '--merge-output-format', 'mp4',
-        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
-    ]);
-
-    // C) eng mosini ol, keyin mp4 ga recode qil (webm/vp9 bo‘lsa ham)
-    const stratC = (extra) => ([
-        ...extra,
-        ...ytCookieArgs(),
-        '--add-header', 'Referer: https://www.youtube.com/',
-        '-f', 'bv*+ba/b',
-        '-S', `res:${height}`,
-        '-o', outPath,
-        '--merge-output-format', 'mp4',
-        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
-        '--recode-video', 'mp4',
-    ]);
-
-    const strategies = [stratA, stratB, stratC];
+    const fallback1 = ['-f', 'bv*+ba/b', '-S', `res:${height}`];
+    const fallback2 = ['-f', `best[height<=${height}]`, '--recode-video', 'mp4'];
 
     let lastErr;
-    for (const client of clientVariants) {
-        for (const makeArgs of strategies) {
-            const args = makeArgs(client);
-            console.log('[YT smart try]', [...args, url].join(' '));
-            try {
-                await execYtDlp([...args, url]);
-                return; // muvaffaqiyatli – chiqamiz
-            } catch (e) {
-                lastErr = e;
-                console.error('YT smart try failed:', e?.stderr || e);
-            }
+    for (const c of clients) {
+        // 1) primary
+        try {
+            console.log('[YT smart try]', [...c, ...primaryFmt, ...common, url].join(' '));
+            await execYtDlp([...c, ...primaryFmt, ...common, url], { timeout: 120000 });
+            return;
+        } catch (e) {
+            lastErr = e;
+            console.error('YT primary failed:', e?.stderr || e);
+        }
+        // 2) fallback #1
+        try {
+            console.log('[YT smart try F1]', [...c, ...fallback1, ...common, url].join(' '));
+            await execYtDlp([...c, ...fallback1, ...common, url], { timeout: 150000 });
+            return;
+        } catch (e) {
+            lastErr = e;
+            console.error('YT fallback1 failed:', e?.stderr || e);
+        }
+        // 3) fallback #2 (recode)
+        try {
+            console.log('[YT smart try F2]', [...c, ...fallback2, ...common, url].join(' '));
+            await execYtDlp([...c, ...fallback2, ...common, url], { timeout: 180000 });
+            return;
+        } catch (e) {
+            lastErr = e;
+            console.error('YT fallback2 failed:', e?.stderr || e);
         }
     }
-    // hammasi yiqilsa — shu xatoni ko‘taramiz
     throw lastErr || new Error('yt-dlp selection failed');
 }
