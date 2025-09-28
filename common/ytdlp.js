@@ -107,7 +107,6 @@ export async function ffmpegTranscodeToH264(inPath, outPath) {
 }
 
 export async function ytDownloadByHeightSmart(url, height, outPath) {
-    // tezroq va barqaror ishlashi uchun umumiy flaglar
     const common = [
         '--add-header', 'Referer: https://www.youtube.com/',
         '--no-continue',
@@ -119,7 +118,6 @@ export async function ytDownloadByHeightSmart(url, height, outPath) {
         '--postprocessor-args', 'ffmpeg:-movflags +faststart'
     ];
 
-    // turli player_client’lar
     const clients = [
         [], // default
         ['--extractor-args', 'youtube:player_client=web_safari'],
@@ -127,7 +125,7 @@ export async function ytDownloadByHeightSmart(url, height, outPath) {
         ['--extractor-args', 'youtube:player_client=android'],
         ['--extractor-args', 'youtube:player_client=ios'],
     ];
-    // past sifatlarda (≤360p) avval progressive MP4 ni sinash foydali
+
     const primaryFmt = (height <= 360)
         ? ['-f', `b[ext=mp4][vcodec*=avc1][height<=${height}]/b[ext=mp4][height<=${height}]`]
         : ['-f', 'bv*+ba/b', '-S', `res:${height},ext:mp4,vcodec:avc1,acodec:m4a`];
@@ -137,32 +135,26 @@ export async function ytDownloadByHeightSmart(url, height, outPath) {
 
     let lastErr;
     for (const c of clients) {
-        // 1) primary
         try {
-            console.log('[YT smart try]', [...c, ...primaryFmt, ...common, url].join(' '));
-            await execYtDlp([...c, ...primaryFmt, ...common, url], { timeout: 120000 });
+            console.log('[YT smart try]', [...ytCookieArgs(), ...c, ...primaryFmt, ...common, url].join(' '));
+            await execYtDlp([...ytCookieArgs(), ...c, ...primaryFmt, ...common, url], { timeout: 120000 });
             return;
         } catch (e) {
-            lastErr = e;
-            console.error('YT primary failed:', e?.stderr || e);
+            lastErr = e; console.error('YT primary failed:', e?.stderr || e);
         }
-        // 2) fallback #1
         try {
-            console.log('[YT smart try F1]', [...c, ...fallback1, ...common, url].join(' '));
-            await execYtDlp([...c, ...fallback1, ...common, url], { timeout: 150000 });
+            console.log('[YT smart try F1]', [...ytCookieArgs(), ...c, ...fallback1, ...common, url].join(' '));
+            await execYtDlp([...ytCookieArgs(), ...c, ...fallback1, ...common, url], { timeout: 150000 });
             return;
         } catch (e) {
-            lastErr = e;
-            console.error('YT fallback1 failed:', e?.stderr || e);
+            lastErr = e; console.error('YT fallback1 failed:', e?.stderr || e);
         }
-        // 3) fallback #2 (recode)
         try {
-            console.log('[YT smart try F2]', [...c, ...fallback2, ...common, url].join(' '));
-            await execYtDlp([...c, ...fallback2, ...common, url], { timeout: 180000 });
+            console.log('[YT smart try F2]', [...ytCookieArgs(), ...c, ...fallback2, ...common, url].join(' '));
+            await execYtDlp([...ytCookieArgs(), ...c, ...fallback2, ...common, url], { timeout: 180000 });
             return;
         } catch (e) {
-            lastErr = e;
-            console.error('YT fallback2 failed:', e?.stderr || e);
+            lastErr = e; console.error('YT fallback2 failed:', e?.stderr || e);
         }
     }
     throw lastErr || new Error('yt-dlp selection failed');
