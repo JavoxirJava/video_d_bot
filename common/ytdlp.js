@@ -16,14 +16,13 @@ export function ytCookieArgs() {
     return [];
 }
 
+
 export function igCookieArgs() {
-    // Prefer browser cookies (same profile as your Chromium login)
     if ((process.env.IG_COOKIES_FROM_BROWSER || '').trim() === '1') {
         const p = (process.env.CHROME_PROFILE_PATH || '').trim();
         const browser = (process.env.IG_BROWSER || process.env.YT_BROWSER || 'chromium').trim();
         if (p) return ['--cookies-from-browser', `${browser}:${p}`];
     }
-    // Fallback to static cookies.txt (must be readable+WRITABLE by current user)
     if (process.env.IG_COOKIES_FILE) return ['--cookies', process.env.IG_COOKIES_FILE];
     return [];
 }
@@ -37,7 +36,6 @@ export function execYtDlp(args, opts = {}) {
         execFile(
             YTDLP,
             [...baseArgs(), ...args],
-            // qat’iyroq timeout beramiz (override qilsa bo‘ladi)
             { maxBuffer: 256e6, timeout: 300000, ...opts },
             (err, stdout, stderr) => {
                 if (err) { err.stderr = stderr; return reject(err); }
@@ -47,9 +45,107 @@ export function execYtDlp(args, opts = {}) {
     });
 }
 
+// ---- YouTube: meta olish
 export async function ytInfo(url) {
     const { stdout } = await execYtDlp(['-J', ...ytCookieArgs(), '--add-header', 'Referer: https://www.youtube.com/', url]);
     return JSON.parse(stdout);
+}
+
+// ---- IG umumiylar (o‘zingsiz ham ishlayapti)
+export async function igDownloadRaw(url, outPath) {
+    const args = [
+        ...igCookieArgs(),
+        '--add-header', 'Accept-Language: en-US,en;q=0.9',
+        '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        '-o', outPath,
+        '--merge-output-format', 'mp4'
+    ];
+    log('[IG raw dl] outPath:', outPath);
+    await execYtDlp([...args, url]);
+}
+
+// Ensiz/kvadrat muammosini olib tashlaydi: SAR=1, o‘lchamni majburlamaydi
+export async function ffmpegTranscodeToH264(inPath, outPath) {
+    const args = [
+        '-y',
+        '-i', inPath,
+        '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1',
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-crf', '23',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-movflags', '+faststart',
+        outPath
+    ];
+    await new Promise((resolve, reject) => {
+        execFile(FFMPEG, args, { maxBuffer: 64e6 }, (err, stdout, stderr) => {
+            if (err) { err.stderr = stderr; return reject(err); }
+            resolve({ stdout, stderr });
+        });
+    });
+}
+
+// 1) formatlar ichidan faqat progressive MP4 (video+audio) larni chiqaramiz
+export function pickProgressiveMp4(info) {
+    return (info?.formats || [])
+        .filter(f => f.ext === 'mp4' && f.vcodec !== 'none' && f.acodec !== 'none' && f.format_id)
+        .map(f => ({
+            itag: Number(f.format_id),
+            height: f.height || null,
+            fps: f.fps || null,
+            note: f.format_note || '',
+            filesize: f.filesize || f.filesize_approx || null
+        }))
+        .filter(f => Number.isFinite(f.itag))
+        .sort((a, b) => (a.height || 0) - (b.height || 0));
+}
+
+// 2) `--newline` progressini o‘qish uchun
+function parseProgressLine(line) {
+    // [download]  42.3% of 50.00MiB at 2.50MiB/s ETA 00:30
+    const m = String(line).match(/\[download\]\s+(\d+(?:\.\d+)?)%/i);
+    if (!m) return null;
+    return { percent: parseFloat(m[1]) };
+}
+
+// 3) aniq itag bo‘yicha yuklash (progress callback bilan)
+export async function ytDownloadByItag(watchUrl, itag, outPath, onProgress = () => { }) {
+    const fmt = ['-f', `[itag=${itag}][vcodec!=none][acodec!=none]/[itag=${itag}]`];
+    const common = [
+        ...ytCookieArgs(),
+        '--add-header', 'Referer: https://www.youtube.com/',
+        '--no-continue', '--force-overwrites',
+        '-N', '4', '--concurrent-fragments', '8',
+        '--newline',
+        '-o', outPath,
+        '--merge-output-format', 'mp4',
+        '--postprocessor-args', 'ffmpeg:-movflags +faststart'
+    ];
+
+    return new Promise((resolve, reject) => {
+        const child = spawn(YTDLP, [...baseArgs(), ...fmt, ...common, watchUrl], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+        let stderrBuf = '';
+        child.stdout.on('data', (chunk) => {
+            const lines = String(chunk).split(/\r?\n/);
+            for (const ln of lines) {
+                const p = parseProgressLine(ln);
+                if (p && Number.isFinite(p.percent)) onProgress(p.percent);
+            }
+        });
+        child.stderr.on('data', (d) => { stderrBuf += String(d); });
+
+        child.on('error', reject);
+        child.on('close', (code) => {
+            if (code === 0) resolve();
+            else {
+                const err = new Error('yt-dlp failed');
+                err.stderr = stderrBuf;
+                reject(err);
+            }
+        });
+    });
 }
 
 export async function genericToMp4(url, outPath, platform = 'instagram') {
@@ -69,43 +165,6 @@ export async function genericToMp4(url, outPath, platform = 'instagram') {
     ];
 
     await execYtDlp(args);
-}
-
-// ytdlp.js — qo'shing
-export async function igDownloadRaw(url, outPath) {
-    const args = [
-        ...igCookieArgs(),
-        '--add-header', 'Accept-Language: en-US,en;q=0.9',
-        // avval MP4 oqimlarini urinamiz, bo'lmasa best ga tushamiz
-        '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-        '-o', outPath,
-        '--merge-output-format', 'mp4'
-    ];
-    log('[IG raw dl] outPath:', outPath);
-    await execYtDlp([...args, url]);
-}
-
-export async function ffmpegTranscodeToH264(inPath, outPath) {
-    const args = [
-        '-y',
-        '-i', inPath,
-        // O‘lchamni saqlaymiz, faqat SAR=1 va juft pikselga tekislaymiz
-        '-vf', 'setsar=1,scale=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p',
-        '-c:v', 'libx264',
-        '-preset', 'veryfast',
-        '-crf', '23',
-        '-c:a', 'aac',
-        '-movflags', '+faststart',
-        // rotate/displaymatrix metadatasini yo‘qotib, “asosiy” orientatsiyada saqlash
-        '-metadata:s:v:0', 'rotate=0',
-        outPath
-    ];
-    await new Promise((resolve, reject) => {
-        execFile(FFMPEG, args, { maxBuffer: 64e6 }, (err, stdout, stderr) => {
-            if (err) { err.stderr = stderr; return reject(err); }
-            resolve({ stdout, stderr });
-        });
-    });
 }
 
 export async function ytDownloadByHeightSmart(url, height, outPath) {
