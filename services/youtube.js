@@ -33,55 +33,45 @@ export async function askYoutubeFormat(ctx, url) {
 }
 
 export async function handleYoutubeChoice(ctx, data) {
-    // data: yt2|<id>|<itag>|<h>
-    const [, video_id, itagStr, hStr] = data.split('|');
+    // services/youtube.js (handleYoutubeChoice ichidagi asosiy blok)
+    console.log('Callback query:', data); // ex: yt2|VIDEOID|301|1080
+    const [kind, video_id, itagStr, heightStr] = (data || '').split('|');
     const itag = Number(itagStr);
-    const height = Number(hStr) || null;
-    if (!video_id || !itag) {
+    const height = Number(heightStr);
+
+    if (kind !== 'yt2' || !video_id || !itag || !height) {
         await ctx.answerCbQuery('Format xatosi', { show_alert: true });
         return;
     }
 
-    const fkey = formatKey({ source: 'yt', height, ext: 'mp4', itag });
-    // kesh
+    const fkey = formatKey({ source: 'yt', height, ext: 'mp4' });
+    console.log('YT itag choice:', { video_id, itag, height, fkey });
+
+    // 1) Kesh
     const cached = await getVideoFile({ platform: 'youtube', video_id, format_key: fkey });
     if (cached?.telegram_file_id) {
         await ctx.answerCbQuery('Keshdan');
-        await ctx.replyWithVideo(
-            cached.telegram_file_id,
-            { supports_streaming: true, caption: `YouTube ${height ? height + 'p' : ''}` }
-        );
+        await ctx.replyWithVideo(cached.telegram_file_id, { supports_streaming: true, caption: `YouTube ${height}p` });
         return;
     }
+
     await ctx.answerCbQuery('Yuklanmoqda…');
-    const statusMsg = await ctx.reply(`⌛ YouTube: ${height ? height + 'p' : ''} tayyorlanmoqda… 0%`);
+    const statusMsg = await ctx.reply(`⌛ YouTube: ${height}p tayyorlanmoqda…`);
 
     const watchUrl = `https://www.youtube.com/watch?v=${video_id}`;
-    const outPath = `/tmp/${video_id}_${itag}.mp4`;
-    const fixedPath = `/tmp/${video_id}_${itag}_fixed.mp4`;
+    const outPath = `/tmp/${video_id}_${height}.mp4`;
+    const fixedPath = `/tmp/${video_id}_${height}_fixed.mp4`;
 
-    let lastShown = 0;
-    const show = async (p) => {
-        if (!Number.isFinite(p)) return;
-        // 5% dan oshganda yangilaymiz
-        if (p - lastShown >= 5) {
-            lastShown = p;
-            try {
-                await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined,
-                    `⌛ YouTube: ${height ? height + 'p' : ''} tayyorlanmoqda… ${Math.floor(p)}%`);
-            } catch { }
-        }
-    };
     try {
-        // aniq itag bo‘yicha yuklash (progress bilan)
-        await ytDownloadByItag(watchUrl, itag, outPath, show);
+        // 2) To‘g‘ri argument tartibi: url, itag, height, outPath
+        await ytDownloadByItag(watchUrl, itag, height, outPath);
 
-        // SAR=1 bilan normalizatsiya (kvadrat/ensiz muammolar uchun ehtiyot chorasi)
+        // 3) (ixtiyoriy) SAR normalize – square/kichrayish muammolari uchun
         await ffmpegTranscodeToH264(outPath, fixedPath);
 
         const sent = await ctx.replyWithVideo(
-            { source: fixedPath, filename: `${video_id}_${height || 'mp4'}.mp4` },
-            { supports_streaming: true, caption: `YouTube ${height ? height + 'p' : ''}` }
+            { source: fixedPath, filename: `${video_id}_${height}p.mp4` },
+            { supports_streaming: true, caption: `YouTube ${height}p` }
         );
 
         const file_id = sent?.video?.file_id || sent?.document?.file_id;
@@ -99,16 +89,12 @@ export async function handleYoutubeChoice(ctx, data) {
                 telegram_file_id: file_id
             });
         }
-    } catch (e) {
-        console.error('YT itag dl error:', e?.stderr || e);
-        // anti-bot/sign-in xatolari uchun foydali ogohlantirish
-        if ((e?.stderr || '').includes('confirm you’re not a bot')) {
-            await ctx.reply('Google anti-bot tekshiruvi sababli format olinmadi. Cookies yoqilganiga ishonch hosil qiling.');
-        } else {
-            await ctx.reply('Formatni olishning iloji bo‘lmadi. Boshqa sifatni tanlab ko‘ring.');
-        }
-    } finally {
         try { await ctx.deleteMessage(statusMsg.message_id); } catch { }
+    } catch (e) {
+        console.error('YT itag dl error:', e?.stderr || e?.message || e);
+        try { await ctx.editMessageText?.('Xatolik: bu sifat mavjud emas. Boshqa sifatni tanlang.'); } catch { }
+        try { await ctx.answerCbQuery('Xatolik', { show_alert: true }); } catch { }
+    } finally {
         const fs = await import('node:fs/promises');
         fs.unlink(outPath).catch(() => { });
         fs.unlink(fixedPath).catch(() => { });

@@ -110,40 +110,40 @@ function parseProgressLine(line) {
 }
 
 // 3) aniq itag bo‘yicha yuklash (progress callback bilan)
-// common/ytdlp.js
 export async function ytDownloadByItag(url, itag, height, outPath) {
-    const base = [
+    // umumiy flaglar
+    const common = [
         ...ytCookieArgs(),
         '--add-header', 'Referer: https://www.youtube.com/',
         '--no-continue',
         '--force-overwrites',
         '-N', '4',
         '--concurrent-fragments', '8',
-        '-o', outPath,
+        '-o', outPath,                              // <-- bu yerga faqat STRING outPath tushadi
         '--merge-output-format', 'mp4',
-        '--postprocessor-args', 'ffmpeg:-movflags +faststart'
+        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
     ];
 
     const tries = [
-        // 1) Aynan itag (progressive mp4 bo‘lsa)
+        // 1) Aynan itag (agar progressive mp4 bo‘lsa)
         ['-f', `[itag=${itag}][ext=mp4]`],
 
-        // 2) Aynan itag (konteynerga qaramay), agar video-only bo‘lsa audio bilan qo‘shib
+        // 2) itag video-only bo‘lsa — bestaudio bilan muxlash
         ['-f', `[itag=${itag}]+bestaudio[ext=m4a]/[itag=${itag}]`],
 
-        // 3) Shu balandlik bo‘yicha h264/mp4 ga preferensiya
+        // 3) Shu balandlikka mp4/h264/m4a preferensiyasi
         ['-f', 'bv*+ba/b', '-S', `res:${height},ext:mp4,vcodec:avc1,acodec:m4a`],
 
-        // 4) Faqat balandlik bo‘yicha (kodekni cheklamaymiz)
+        // 4) Faqat balandlik bo‘yicha (kodek cheklanmasin)
         ['-f', 'bv*+ba/b', '-S', `res:${height}`],
 
-        // 5) Eng mosini olamiz, kerak bo‘lsa mp4 ga qayta kodlaymiz
+        // 5) Eng mosini ol, kerak bo‘lsa mp4 ga recode
         ['-f', `best[height<=${height}]`, '--recode-video', 'mp4'],
     ];
 
     let lastErr;
     for (const t of tries) {
-        const args = [...t, ...base, url];
+        const args = [...t, ...common, url];
         console.log('[YT itag/fallback try]', args.join(' '));
         try {
             await execYtDlp(args, { timeout: 180000 });
@@ -155,7 +155,6 @@ export async function ytDownloadByItag(url, itag, height, outPath) {
     }
     throw lastErr || new Error('No working format found');
 }
-
 
 export async function genericToMp4(url, outPath, platform = 'instagram') {
     log('igCookieArgs:', igCookieArgs());
