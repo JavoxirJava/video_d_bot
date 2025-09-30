@@ -110,43 +110,52 @@ function parseProgressLine(line) {
 }
 
 // 3) aniq itag bo‘yicha yuklash (progress callback bilan)
-export async function ytDownloadByItag(watchUrl, itag, outPath, onProgress = () => { }) {
-    const fmt = ['-f', `[itag=${itag}][vcodec!=none][acodec!=none]/[itag=${itag}]`];
-    const common = [
+// common/ytdlp.js
+export async function ytDownloadByItag(url, itag, height, outPath) {
+    const base = [
         ...ytCookieArgs(),
         '--add-header', 'Referer: https://www.youtube.com/',
-        '--no-continue', '--force-overwrites',
-        '-N', '4', '--concurrent-fragments', '8',
-        '--newline',
+        '--no-continue',
+        '--force-overwrites',
+        '-N', '4',
+        '--concurrent-fragments', '8',
         '-o', outPath,
         '--merge-output-format', 'mp4',
         '--postprocessor-args', 'ffmpeg:-movflags +faststart'
     ];
 
-    return new Promise((resolve, reject) => {
-        const child = spawn(YTDLP, [...baseArgs(), ...fmt, ...common, watchUrl], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const tries = [
+        // 1) Aynan itag (progressive mp4 bo‘lsa)
+        ['-f', `[itag=${itag}][ext=mp4]`],
 
-        let stderrBuf = '';
-        child.stdout.on('data', (chunk) => {
-            const lines = String(chunk).split(/\r?\n/);
-            for (const ln of lines) {
-                const p = parseProgressLine(ln);
-                if (p && Number.isFinite(p.percent)) onProgress(p.percent);
-            }
-        });
-        child.stderr.on('data', (d) => { stderrBuf += String(d); });
+        // 2) Aynan itag (konteynerga qaramay), agar video-only bo‘lsa audio bilan qo‘shib
+        ['-f', `[itag=${itag}]+bestaudio[ext=m4a]/[itag=${itag}]`],
 
-        child.on('error', reject);
-        child.on('close', (code) => {
-            if (code === 0) resolve();
-            else {
-                const err = new Error('yt-dlp failed');
-                err.stderr = stderrBuf;
-                reject(err);
-            }
-        });
-    });
+        // 3) Shu balandlik bo‘yicha h264/mp4 ga preferensiya
+        ['-f', 'bv*+ba/b', '-S', `res:${height},ext:mp4,vcodec:avc1,acodec:m4a`],
+
+        // 4) Faqat balandlik bo‘yicha (kodekni cheklamaymiz)
+        ['-f', 'bv*+ba/b', '-S', `res:${height}`],
+
+        // 5) Eng mosini olamiz, kerak bo‘lsa mp4 ga qayta kodlaymiz
+        ['-f', `best[height<=${height}]`, '--recode-video', 'mp4'],
+    ];
+
+    let lastErr;
+    for (const t of tries) {
+        const args = [...t, ...base, url];
+        console.log('[YT itag/fallback try]', args.join(' '));
+        try {
+            await execYtDlp(args, { timeout: 180000 });
+            return; // muvaffaqiyat
+        } catch (e) {
+            lastErr = e;
+            console.error('YT itag/fallback failed:', e?.stderr || e);
+        }
+    }
+    throw lastErr || new Error('No working format found');
 }
+
 
 export async function genericToMp4(url, outPath, platform = 'instagram') {
     log('igCookieArgs:', igCookieArgs());
