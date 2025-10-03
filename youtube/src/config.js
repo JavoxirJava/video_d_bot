@@ -20,7 +20,7 @@ export const config = {
         ffmpeg: process.env.FFMPEG_PATH || 'ffmpeg',
         tmpDir: process.env.TMPDIR || '/tmp/video_d_bot'
     },
-    cookiesFromBrowser: process.env.CHROME_PROFILE_PATH || '',
+    cookiesFromBrowser: "chromium:" + process.env.CHROME_PROFILE_PATH || '',
     limits: {
         // Telegram limit — botlar 50MB gacha faylga ruxsat beradi (o'zgarishi mumkin).
         // Katta fayllarda document sifatida yuboramiz.
