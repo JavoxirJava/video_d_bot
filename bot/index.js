@@ -3,14 +3,13 @@ import { Telegraf } from 'telegraf';
 import { detectPlatform } from '../common/utils.js';
 import { migrate } from '../db/index.js';
 import { makeHttp } from '../http/server.js';
+import { instagramDownload } from '../instagram/instagramDownload.js';
 import { checkMembership } from '../instagram/middleware/checkMembership.js';
 import { mainMenu, premiumCTA } from '../keyboards.js';
-import { handleInstagram } from '../services/instagram.js';
 import { ytButton, ytLink } from '../youtube/src/youtubeControl.js';
 import { buttonMusic, buttonMusicPager, clickMusic, handleFindMusicFromVideo, handleVoiceMusic, registerMusicHandlers } from './music.js';
-import { instagramDownload } from '../instagram/instagramDownload.js';
 
-const bot = new Telegraf(process.env.BOT_TOKEN, { handlerTimeout: Infinity });
+const bot = new Telegraf(process.env.V_BOT_TOKEN, { handlerTimeout: Infinity });
 const session = new Map();
 
 bot.start(async (ctx) => {

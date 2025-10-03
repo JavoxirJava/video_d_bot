@@ -3,7 +3,7 @@ import axios from 'axios';
 
 
 export const CFG = {
-    BOT_TOKEN: process.env.BOT_TOKEN,
+    BOT_TOKEN: process.env.V_BOT_TOKEN,
     BOT_USERNAME: process.env.BOT_USERNAME,
     RAPIDAPI_KEY: process.env.RAPIDAPI_KEY,
     RAPIDAPI_HOST: process.env.RAPIDAPI_HOST,

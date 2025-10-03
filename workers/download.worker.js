@@ -7,7 +7,7 @@ const connection = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 const concurrency = Number(process.env.WORKER_CONCURRENCY || 2);
 
 // ⛔ Bot tokenni bu yerda ishlatmaslik ham mumkin: o‘zingdagi sendLogikani import qil.
-const bot = new Telegraf(process.env.BOT_TOKEN, { handlerTimeout: Infinity });
+const bot = new Telegraf(process.env.V_BOT_TOKEN, { handlerTimeout: Infinity });
 
 new Worker('download', async (job) => {
     const { url, formatKey, preferMux, chatId, messageId } = job.data;

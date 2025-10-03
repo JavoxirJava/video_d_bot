@@ -188,7 +188,7 @@ export async function handleVoiceMusic(ctx, bot) {
     if (!voice) return;
     const fileId = voice.file_id;
     const file = await ctx.telegram.getFile(fileId);
-    const url = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
+    const url = `https://api.telegram.org/file/bot${process.env.V_BOT_TOKEN}/${file.file_path}`;
 
     const tmpIn = path.join('/tmp', `v_${Date.now()}_${Math.random().toString(36).slice(2)}.oga`);
     const status = await ctx.reply('📥 Ovoz qabul qilindi. Yuklab olinmoqda…');

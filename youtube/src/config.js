@@ -1,9 +1,8 @@
 import 'dotenv/config';
 import fs from 'fs';
-import path from 'path';
 
 export const config = {
-    botToken: process.env.BOT_TOKEN,
+    botToken: process.env.V_BOT_TOKEN,
     webhookSecret: process.env.WEBHOOK_SECRET || 'webhook',
     publicUrl: process.env.PUBLIC_URL,
     port: Number(process.env.PORT || 8080),
