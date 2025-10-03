@@ -27,7 +27,7 @@ bot.on('callback_query', async (ctx) => {
     try {
         if (data.startsWith('mpage|')) return buttonMusicPager(ctx);
         if (data.startsWith('music|')) await buttonMusic(ctx, data, bot); // clear loading state
-        if (data.startsWith('d|')) return await ytButton(ctx, data);
+        if (data.startsWith('d:')) return await ytButton(ctx, data);
         if (data.startsWith('aud|')) return handleFindMusicFromVideo(ctx, data);
         if (data === 'buy_premium') return ctx.reply('Premium sotib olish tez orada…', premiumCTA());
         if (data === 'menu_video') return ctx.reply('Link yuboring.');
