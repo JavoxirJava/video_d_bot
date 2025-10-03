@@ -8,7 +8,7 @@
   "main": "bot.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node bot/index.js",
+    "start": "concurrently -k -n bot,worker -c green,blue \"node bot/index.js\" \"node youtube/src/worker.js\"",
     "dev": "node bot/index.js"
   },
   "dependencies": {
@@ -19,6 +19,12 @@
     "ioredis": "^5.4.1",
     "p-queue": "^7.4.1",
     "pg": "^8.16.3",
-    "telegraf": "^4.16.3"
+    "telegraf": "^4.16.3",
+    "pino": "^9.4.0",
+    "sanitize-filename": "^1.6.3",
+    "nanoid": "^5.0.7"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

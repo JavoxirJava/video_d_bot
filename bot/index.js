@@ -8,6 +8,7 @@ import { ensureSubscribed } from '../middlewares/subscription.js';
 import { handleInstagram } from '../services/instagram.js';
 import { askYoutubeFormat, handleYoutubeChoice as handleYt2 } from '../services/youtube.js';
 import { buttonMusic, buttonMusicPager, clickMusic, handleVoiceMusic, registerMusicHandlers, handleFindMusicFromVideo } from './music.js';
+import { ytLink, ytButton } from '../youtube/src/youtubeControl.js';
 
 const bot = new Telegraf(process.env.BOT_TOKEN, { handlerTimeout: Infinity });
 const session = new Map();
@@ -26,7 +27,7 @@ bot.on('callback_query', async (ctx) => {
     try {
         if (data.startsWith('mpage|')) return buttonMusicPager(ctx);
         if (data.startsWith('music|')) await buttonMusic(ctx, data, bot); // clear loading state
-        if (data.startsWith('yt2|')) return await handleYt2(ctx, data, bot);
+        if (data.startsWith('d|')) return await ytButton(ctx, data);
         if (data.startsWith('aud|')) return handleFindMusicFromVideo(ctx, data);
         if (data === 'buy_premium') return ctx.reply('Premium sotib olish tez orada…', premiumCTA());
         if (data === 'menu_video') return ctx.reply('Link yuboring.');
@@ -54,7 +55,7 @@ bot.on('message', async (ctx) => {
         const p = detectPlatform(url);
         console.log('Platform:', p);
         try {
-            if (p === 'youtube') await askYoutubeFormat(ctx, url);
+            if (p === 'youtube') await ytLink(ctx, url);
             else if (p === 'instagram') await handleInstagram(ctx, url, { tier: 'free' });
             else ctx.reply('Hozircha YouTube/Instagram.');
         } catch (e) {
