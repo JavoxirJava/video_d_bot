@@ -165,7 +165,7 @@ export async function ytButton(ctx, data) {
     if (sizeBytes && sizeBytes > MAX_BYTES) {
         return ctx.reply(
             `⚠️ Tanlangan format hajmi ~${bytesToMB(sizeBytes).toFixed(1)} MB.\n` +
-            `Biz 50MB dan kattalarni yuklamay olmaymiz. Iltimos kichikroq format tanlang.`
+            `Biz 50MB dan kattalarni yuklay olmaymiz. Iltimos kichikroq format tanlang.`
         );
     }
 

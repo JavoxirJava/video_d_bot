@@ -3,12 +3,12 @@ import { Telegraf } from 'telegraf';
 import { detectPlatform } from '../common/utils.js';
 import { migrate } from '../db/index.js';
 import { makeHttp } from '../http/server.js';
+import { checkMembership } from '../instagram/middleware/checkMembership.js';
 import { mainMenu, premiumCTA } from '../keyboards.js';
-import { ensureSubscribed } from '../middlewares/subscription.js';
 import { handleInstagram } from '../services/instagram.js';
-import { askYoutubeFormat, handleYoutubeChoice as handleYt2 } from '../services/youtube.js';
-import { buttonMusic, buttonMusicPager, clickMusic, handleVoiceMusic, registerMusicHandlers, handleFindMusicFromVideo } from './music.js';
-import { ytLink, ytButton } from '../youtube/src/youtubeControl.js';
+import { ytButton, ytLink } from '../youtube/src/youtubeControl.js';
+import { buttonMusic, buttonMusicPager, clickMusic, handleFindMusicFromVideo, handleVoiceMusic, registerMusicHandlers } from './music.js';
+import { instagramDownload } from '../instagram/instagramDownload.js';
 
 const bot = new Telegraf(process.env.BOT_TOKEN, { handlerTimeout: Infinity });
 const session = new Map();
@@ -17,7 +17,8 @@ bot.start(async (ctx) => {
     await ctx.reply('Salom! Yuklamoqchi bo‘lgan linkni yuboring yoki menyudan tanlang.', mainMenu());
 });
 
-bot.use(ensureSubscribed);
+bot.use(checkMembership(bot));
+
 
 // Callback handler for YouTube format buttons
 bot.on('callback_query', async (ctx) => {
@@ -56,7 +57,7 @@ bot.on('message', async (ctx) => {
         console.log('Platform:', p);
         try {
             if (p === 'youtube') await ytLink(ctx, url);
-            else if (p === 'instagram') await handleInstagram(ctx, url, { tier: 'free' });
+            else if (p === 'instagram') instagramDownload(ctx, url);
             else ctx.reply('Hozircha YouTube/Instagram.');
         } catch (e) {
             console.error('Download error:', e?.stderr || e?.message || e);

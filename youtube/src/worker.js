@@ -1,14 +1,15 @@
-import pino from 'pino';
-import { Worker } from './queue.js';
-import { connection } from './queue.js';
-import { config } from './config.js';
-import { buildDownloadArgs, resolveFinalPath } from './utils/yt.js';
-import { parseProgressLine } from './utils/progress.js';
-import { upsertVideo, insertFile, markFileReady, markFileFailed } from './db.js';
-import { Telegraf } from 'telegraf';
-import { spawn } from 'node:child_process';
 import fs from 'fs';
+import { spawn } from 'node:child_process';
 import os from 'os';
+import pino from 'pino';
+import { Telegraf } from 'telegraf';
+import { startWorker } from '../../instagram/queue/consumer.js';
+import { config } from './config.js';
+import { insertFile, markFileFailed, markFileReady, upsertVideo } from './db.js';
+import { connection, Worker } from './queue.js';
+import { parseProgressLine } from './utils/progress.js';
+import { buildDownloadArgs, resolveFinalPath } from './utils/yt.js';
+
 
 const log = pino({ level: 'info' });
 const telegram = new Telegraf(config.botToken).telegram;
@@ -198,3 +199,6 @@ export const worker = new Worker('download', async job => {
 worker.on('failed', (job, err) => {
     log.error({ jobId: job.id, err }, 'Job failed');
 });
+
+// Instagram worker start
+startWorker();
