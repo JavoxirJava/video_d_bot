@@ -17,6 +17,6 @@ export function mainMenu() {
 
 export function premiumCTA() {
     return Markup.inlineKeyboard([
-        [Markup.button.callback('🚀 Premium sotib olish', 'buy_premium')]
+        [Markup.button.url('🚀 Premium', 'https://t.me/avgroup_ad')],
     ]);
 }

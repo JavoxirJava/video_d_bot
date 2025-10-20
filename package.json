@@ -9,7 +9,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "concurrently -k -n bot,worker -c green,blue \"node bot/index.js\" \"node youtube/src/worker.js\"",
-    "dev": "node bot/index.js"
+    "dev": "node bot/index.js",
+    "all": "node bot/index.js & node youtube/src/worker.js & node search_music/src/worker.js"
   },
   "dependencies": {
     "axios": "^1.12.2",
@@ -23,7 +24,15 @@
     "pino": "^9.4.0",
     "sanitize-filename": "^1.6.3",
     "nanoid": "^5.0.7",
-    "file-type": "^18.7.0"
+    "file-type": "^18.7.0",
+    "ffmpeg-static": "^5.2.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "form-data": "^4.0.0",
+    "fs-extra": "^11.2.0",
+    "node-fetch": "^3.3.2",
+    "qs": "^6.13.0",
+    "yt-search": "^2.13.1",
+    "ytdl-core": "^4.11.5"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

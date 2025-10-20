@@ -1,0 +1,4 @@
+export function mmss(ms) { if (!ms || isNaN(ms)) return ''; const s = Math.round(ms / 1000); const m = Math.floor(s / 60); const r = s % 60; return `${m}:${String(r).padStart(2, '0')}`; }
+export function normalize(str = '') { return String(str).toLowerCase().replace(/\s+/g, ' ').trim(); }
+export function titlesMatch(aTitle, bTitle) { const a = normalize(aTitle).replace(/[-–—]/g, ' ').replace(/\(.*?\)|\[.*?\]/g, ''); const b = normalize(bTitle).replace(/[-–—]/g, ' ').replace(/\(.*?\)|\[.*?\]/g, ''); return a === b; }
+export function artistsMatch(aArtist, bArtist) { const a = normalize(aArtist); const b = normalize(bArtist); return a === b || a.includes(b) || b.includes(a); }

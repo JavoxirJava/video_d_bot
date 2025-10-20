@@ -3,10 +3,10 @@ import axios from 'axios';
 
 
 export const CFG = {
-    BOT_TOKEN: process.env.V_BOT_TOKEN,
+    BOT_TOKEN: process.env.V_BOT_TOKEN || process.env.BOT_TOKEN,
     BOT_USERNAME: process.env.BOT_USERNAME,
     RAPIDAPI_KEY: process.env.RAPIDAPI_KEY,
-    RAPIDAPI_HOST: process.env.RAPIDAPI_HOST,
+    RAPIDAPI_HOST: process.env.I_RAPIDAPI_HOST,
     RAPIDAPI_BASE_URL: process.env.RAPIDAPI_BASE_URL,
     RAPIDAPI_ENDPOINT: process.env.RAPIDAPI_ENDPOINT || '/index',
     REDIS_URL: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
