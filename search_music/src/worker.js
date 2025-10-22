@@ -24,7 +24,7 @@ const connection = new IORedis(process.env.REDIS_URL || 'redis://127.0.0.1:6379'
 const queueName = 'musicQueue';
 const concurrency = parseInt(process.env.WORKER_CONCURRENCY || '3', 10);
 
-const telegram = new Telegraf(process.env.BOT_TOKEN).telegram; // sending only
+const telegram = new Telegraf(process.env.V_BOT_TOKEN).telegram; // sending only
 
 // Worker: processes two job types
 // 1) downloadBySpotify { chatId, replyTo, title, artist, spotifyUrl?, id? }
@@ -50,8 +50,8 @@ const worker = new Worker(queueName, async (job) => {
         const stats = fs.statSync(outPath);
 
         if (stats.size <= 49 * 1024 * 1024)
-            await telegram.sendAudio(chatId, { source: outPath }, { title, performer: artist, reply_to_message_id: replyTo });
-        else await telegram.sendDocument(chatId, { source: outPath }, { caption: `${artist || ''} — ${title || ''}`, reply_to_message_id: replyTo });
+            await telegram.sendAudio(chatId, { source: outPath }, { title, performer: artist });
+        else await telegram.sendDocument(chatId, { source: outPath }, { caption: `${artist || ''} — ${title || ''}` });
         console.log('[worker] replayTo:', replyTo);
 
         fs.unlinkSync(outPath);
@@ -94,10 +94,14 @@ const worker = new Worker(queueName, async (job) => {
         await downloadSpotifyTrack(info.spotifyUrl || spotifyUrl, outPath);
 
         const stats = fs.statSync(outPath);
-        if (stats.size <= 49 * 1024 * 1024)
-            await telegram.sendAudio(chatId, { source: outPath }, { title: info.title, performer: info.artist, reply_to_message_id: replyTo });
-        else await telegram.sendDocument(chatId, { source: outPath }, { caption: `${info.artist} — ${info.title}`, reply_to_message_id: replyTo });
+        console.log('1 [worker] replayTo:', replyTo);
 
+        if (stats.size <= 49 * 1024 * 1024)
+            await telegram.sendAudio(chatId, { source: outPath }, { title: info.title, performer: info.artist });
+        else await telegram.sendDocument(chatId, { source: outPath }, { caption: `${info.artist} — ${info.title}` });
+
+        console.log('2 [worker] replayTo:', replyTo);
+        
         fs.unlinkSync(inPath); fs.unlinkSync(wavPath); fs.unlinkSync(samplePath); fs.unlinkSync(outPath);
         return { ok: true };
     }
