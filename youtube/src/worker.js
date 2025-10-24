@@ -9,6 +9,8 @@ import { insertFile, markFileFailed, markFileReady, upsertVideo } from './db.js'
 import { connection, Worker } from './queue.js';
 import { parseProgressLine } from './utils/progress.js';
 import { buildDownloadArgs, resolveFinalPath } from './utils/yt.js';
+import { inlineMusicKeyboard } from '../../keyboards.js';
+import { CFG } from '../../instagram/config.js';
 
 
 const log = pino({ level: 'info' });
@@ -161,6 +163,8 @@ export const worker = new Worker('download', async job => {
 
     try {
         let msg;
+        const CAPTION = 'Video ' + CFG.BOT_USERNAME + ' orqali yuklandi.';
+
         if (forceDocument) {
             msg = await telegram.sendDocument(chatId, { source: sendPath, filename }, { caption: '📁 Video' });
             await markFileReady(fileRow.id, {
@@ -174,7 +178,7 @@ export const worker = new Worker('download', async job => {
             msg = await telegram.sendVideo(
                 chatId,
                 { source: sendPath, filename },
-                { width, height, supports_streaming: true }
+                { width, height, supports_streaming: true, caption: CAPTION, reply_markup: inlineMusicKeyboard() },
             );
             await markFileReady(fileRow.id, {
                 telegram_file_id: msg.video.file_id,

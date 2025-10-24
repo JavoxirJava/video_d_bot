@@ -52,7 +52,7 @@ const worker = new Worker(queueName, async (job) => {
         if (stats.size <= 49 * 1024 * 1024)
             await telegram.sendAudio(chatId, { source: outPath }, { title, performer: artist });
         else await telegram.sendDocument(chatId, { source: outPath }, { caption: `${artist || ''} — ${title || ''}` });
-        console.log('[worker] replayTo:', replyTo);
+        console.log('[worker][MUSIC] replayTo:', replyTo);
 
         fs.unlinkSync(outPath);
         return { ok: true };
@@ -94,13 +94,13 @@ const worker = new Worker(queueName, async (job) => {
         await downloadSpotifyTrack(info.spotifyUrl || spotifyUrl, outPath);
 
         const stats = fs.statSync(outPath);
-        console.log('1 [worker] replayTo:', replyTo);
+        console.log('1 [worker][MUSIC] replayTo:', replyTo);
 
         if (stats.size <= 49 * 1024 * 1024)
             await telegram.sendAudio(chatId, { source: outPath }, { title: info.title, performer: info.artist });
         else await telegram.sendDocument(chatId, { source: outPath }, { caption: `${info.artist} — ${info.title}` });
 
-        console.log('2 [worker] replayTo:', replyTo);
+        console.log('2 [worker][MUSIC] replayTo:', replyTo);
         
         fs.unlinkSync(inPath); fs.unlinkSync(wavPath); fs.unlinkSync(samplePath); fs.unlinkSync(outPath);
         return { ok: true };
@@ -113,4 +113,4 @@ const events = new QueueEvents(queueName, { connection });
 events.on('completed', ({ jobId }) => console.log('[worker] completed', jobId));
 events.on('failed', ({ jobId, failedReason }) => console.error('[worker] failed', jobId, failedReason));
 
-console.log('Worker started with concurrency=', concurrency);
+console.log('[worker][MUSIC] Worker started with concurrency=', concurrency);

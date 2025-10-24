@@ -5,15 +5,23 @@ import { cacheGet, cacheSet } from '../cache/store.js';
 import { CFG } from '../config.js';
 import { downloadMedia } from '../services/downloader.js';
 import { igCodeFromUrl, safeFilename, sleep } from '../utils.js';
+import { inlineMusicKeyboard } from '../../keyboards.js';
 
 const tg = new Telegraf(CFG.BOT_TOKEN); // launch shart emas, telegram.* yetarli
-const CAPTION = 'Downloaded via ' + CFG.BOT_USERNAME;
+const CAPTION = 'Video ' + CFG.BOT_USERNAME + ' orqali yuklandi.';
 
 export async function processJob(job) {
-    console.log('Processing job:', job.id, job.data);
+    console.log('[QUEUE][Instagram] Processing job:', job.id, job.data);
 
     const { chatId, igUrl, replyToMessageId } = job.data;
     const code = igCodeFromUrl(igUrl);
+
+    const extra = {
+        caption: CAPTION,
+        supports_streaming: true,
+        reply_to_message_id: replyToMessageId,
+        reply_markup: inlineMusicKeyboard()
+    };
 
     try {
         // 0) Cache’dan tekshirish
@@ -31,7 +39,7 @@ export async function processJob(job) {
                     await tg.telegram.sendVideo(
                         chatId,
                         cached.file_id,
-                        { caption: CAPTION, supports_streaming: true, reply_to_message_id: replyToMessageId }
+                        { caption: CAPTION, supports_streaming: true, reply_to_message_id: replyToMessageId, reply_markup: inlineMusicKeyboard() }
                     );
                 }
                 if (CFG.RATE_GAP_MS > 0) await sleep(CFG.RATE_GAP_MS);
@@ -48,19 +56,16 @@ export async function processJob(job) {
         // 2) Avval URL orqali yuborib ko‘ramiz — file_id ni olaylik
         let sent;
         try {
-            if (m.type === 'photo') {
-                sent = await tg.telegram.sendPhoto(
-                    chatId,
-                    { url: m.url },
-                    { caption: CAPTION, reply_to_message_id: replyToMessageId }
-                );
-            } else {
-                sent = await tg.telegram.sendVideo(
-                    chatId,
-                    { url: m.url },
-                    { caption: CAPTION, supports_streaming: true, reply_to_message_id: replyToMessageId }
-                );
-            }
+            if (m.type === 'photo') sent = await tg.telegram.sendPhoto(
+                chatId,
+                { url: m.url },
+                { caption: CAPTION, reply_to_message_id: replyToMessageId }
+            );
+            else sent = await tg.telegram.sendVideo(
+                chatId,
+                { url: m.url },
+                { caption: CAPTION, supports_streaming: true, reply_to_message_id: replyToMessageId, reply_markup: inlineMusicKeyboard() }
+            );
         } catch {
             // 3) URL bilan bo‘lmadi — buffer qilib yuboramiz
             const resp = await axios.get(m.url, { responseType: 'arraybuffer', timeout: 120000 });
@@ -78,7 +83,7 @@ export async function processJob(job) {
                 sent = await tg.telegram.sendVideo(
                     chatId,
                     { source: buf, filename },
-                    { caption: CAPTION, supports_streaming: true, reply_to_message_id: replyToMessageId }
+                    { caption: CAPTION, supports_streaming: true, reply_to_message_id: replyToMessageId, reply_markup: inlineMusicKeyboard() }
                 );
             }
         }
@@ -107,7 +112,7 @@ export async function processJob(job) {
         if (CFG.RATE_GAP_MS > 0) await sleep(CFG.RATE_GAP_MS);
         return { ok: true, cached: false };
     } catch (err) {
-        console.error('Worker error:', err?.response?.status, err?.response?.data || err.message);
+        console.error('[QUEUE][Instagram] Worker error:', err?.response?.status, err?.response?.data || err.message);
         try { await tg.telegram.sendMessage(chatId, 'Xato: media topilmadi yoki post private.'); } catch { }
         throw err;
     }

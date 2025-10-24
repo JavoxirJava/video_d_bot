@@ -20,3 +20,13 @@ export function premiumCTA() {
         [Markup.button.url('🚀 Premium', 'https://t.me/avgroup_ad')],
     ]);
 }
+
+// export function inlineMusicKeyboard() {
+//     return Markup.inlineKeyboard([
+//         [Markup.button.callback('🎵 Musiqasini qidiriish', `rec_here`)]
+//     ]);
+// };
+
+export function inlineMusicKeyboard() {
+    return { inline_keyboard: [[{ text: '🎵 Musiqasini aniqlash', callback_data: 'rec_here' }]] };
+}

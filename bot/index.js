@@ -1,17 +1,18 @@
 import 'dotenv/config';
 import { Telegraf } from 'telegraf';
+import { ai, chooseAIHandler } from '../ai/src/ai.js';
 import { detectPlatform } from '../common/utils.js';
 import { migrate } from '../db/index.js';
 import { makeHttp } from '../http/server.js';
 import { instagramDownload } from '../instagram/instagramDownload.js';
 import { checkMembership } from '../instagram/middleware/checkMembership.js';
 import { mainMenu, premiumCTA } from '../keyboards.js';
-import { ytButton, ytLink } from '../youtube/src/youtubeControl.js';
-import { buttonMusic, buttonMusicPager, clickMusic, handleFindMusicFromVideo, handleVoiceMusic, registerMusicHandlers } from './music.js';
-import { handleSongCommand } from '../search_music/src/handlers/songSearch.js';
 import { handleCallbackPick } from '../search_music/src/handlers/callbackPick.js';
 import { handleRecognition } from '../search_music/src/handlers/recognize.js';
-import { ai, chooseAIHandler } from '../ai/src/ai.js';
+import { handleSongCommand } from '../search_music/src/handlers/songSearch.js';
+import { clickMusic } from '../search_music/src/utils/helpers.js';
+import { ytButton, ytLink } from '../youtube/src/youtubeControl.js';
+import { handleRecHere } from './helpers.js';
 
 const bot = new Telegraf(process.env.V_BOT_TOKEN, { handlerTimeout: Infinity });
 const session = new Map();
@@ -48,11 +49,9 @@ bot.on('callback_query', async (ctx) => {
     console.log('Callback query:', data);
 
     try {
-        if (data.startsWith('mpage|')) return buttonMusicPager(ctx);
-        if (data.startsWith('music|')) await buttonMusic(ctx, data, bot); // clear loading state
         if (data.startsWith('d:')) return await ytButton(ctx, data);
-        if (data.startsWith('aud|')) return handleFindMusicFromVideo(ctx, data);
         if (/^pick:(\d+):(\d+)$/.exec(data)) return handleCallbackPick(ctx);
+        if (data === 'rec_here') return handleRecHere(ctx);
 
         switch (data) {
             case 'menu_premium': return ctx.reply('Premium sotib olish tez orada…', premiumCTA());

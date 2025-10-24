@@ -4,7 +4,7 @@ import { connection } from './connection.js';
 import { igCodeFromUrl } from '../utils.js';
 
 const QNAME = (CFG.QUEUE_NAME || 'ig_download').replace(/:/g, '-');
-console.log('[QUEUE] Producer QNAME =', QNAME);
+console.log('[QUEUE][Instagram] Producer QNAME =', QNAME);
 
 export const downloadQueue = new Queue(QNAME, {
     connection,
@@ -37,7 +37,7 @@ async function hasSimilarInFlight(chatId, igUrl) {
 
 export async function enqueueDownload({ chatId, igUrl, replyToMessageId }) {
     if (await hasSimilarInFlight(chatId, igUrl)) {
-        console.log('[QUEUE] Skip duplicate in-flight for', chatId, igUrl);
+        console.log('[QUEUE][Instagram] Skip duplicate in-flight for', chatId, igUrl);
         return null;
     }
 
@@ -48,6 +48,6 @@ export async function enqueueDownload({ chatId, igUrl, replyToMessageId }) {
         { chatId, igUrl, replyToMessageId },
         { jobId }
     );
-    console.log('[QUEUE] Enqueued job', job.id);
+    console.log('[QUEUE][Instagram] Enqueued job', job.id);
     return job;
 }

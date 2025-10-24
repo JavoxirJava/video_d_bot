@@ -22,6 +22,6 @@ export async function handleSongCommand(ctx) {
         setPicks(ctx.chat.id, sent.message_id, items);
     } catch (e) {
         console.error(e);
-        ctx.reply('❌ Xatolik: ' + (e?.response?.status || e.message || 'nomalum'));
+        ctx.reply('[Song][Music] ❌ Xatolik: ' + (e?.response?.status || e.message || 'nomalum'));
     }
 }

@@ -1,4 +1,3 @@
-// src/queue/queue.js
 import pkg from 'bullmq';
 const { Queue } = pkg;              // <-- MUHIM: CJS dan destructure
 import IORedis from 'ioredis';
