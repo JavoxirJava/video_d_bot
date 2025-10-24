@@ -27,6 +27,21 @@ bot.command('video', ctx => ctx.reply('Link yuboring.'))
 bot.command('ai', ctx => chooseAIHandler(ctx, session))
 bot.command('premium', ctx => ctx.reply('Ushbu akkauntga murjaat qiling', premiumCTA()))
 
+// Text messages: detect URL(s)
+bot.on('message', async (ctx) => {
+    /// Handle voice/audio recognition
+    if (ctx.message?.voice) return handleRecognition(ctx, ctx.message.voice.file_id, 'ogg')
+    if (ctx.message?.audio) return handleRecognition(ctx, ctx.message.audio.file_id, 'mp3')
+    if (!ctx.message?.text) return;
+
+    const text = ctx.message.text || '';
+    const urls = (text.match(/https?:\/\/[\w%\-_.?&=#/]+/gi) || []).slice(0, 2);
+
+    if (urls.length) return videoDownloadPlaceholder(ctx, urls);
+    if (session.get(ctx.from.id) === 'musicText') return handleSongCommand(ctx);
+    if (session.get(ctx.from.id) === 'ai') return ai(ctx);
+});
+
 // Callback handler for YouTube format buttons
 bot.on('callback_query', async (ctx) => {
     const data = ctx.callbackQuery?.data || '';
@@ -37,33 +52,20 @@ bot.on('callback_query', async (ctx) => {
         if (data.startsWith('music|')) await buttonMusic(ctx, data, bot); // clear loading state
         if (data.startsWith('d:')) return await ytButton(ctx, data);
         if (data.startsWith('aud|')) return handleFindMusicFromVideo(ctx, data);
-        if (data === 'buy_premium') return ctx.reply('Premium sotib olish tez orada…', premiumCTA());
-        if (data === 'menu_video') return ctx.reply('Link yuboring.');
-        if (data === 'menu_music') return clickMusic(ctx, session);
-        if (data === 'menu_ai') return chooseAIHandler(ctx, session);
         if (/^pick:(\d+):(\d+)$/.exec(data)) return handleCallbackPick(ctx);
-    } catch (e) {   
+
+        switch (data) {
+            case 'menu_premium': return ctx.reply('Premium sotib olish tez orada…', premiumCTA());
+            case 'menu_video': return ctx.reply('Link yuboring.');
+            case 'menu_music': return clickMusic(ctx, session);
+            case 'menu_ai': return chooseAIHandler(ctx, session);
+        }
+    } catch (e) {
         console.error('cb error', e); await ctx.answerCbQuery('Xatolik');
     }
 });
 
-// Text messages: detect URL(s)
-bot.on('message', async (ctx) => {
-    if (ctx.message?.voice) return handleRecognition(ctx, ctx.message.voice.file_id, 'ogg')
-    if (ctx.message?.audio) return handleRecognition(ctx, ctx.message.audio.file_id, 'mp3')
-    // if (ctx.message?.voice || ctx.message?.audio) handleVoiceMusic(ctx, bot);
-    if (!ctx.message?.text) return;
-    if (session.get(ctx.from.id) === 'musicText') {
-        // registerMusicHandlers(ctx);
-        handleSongCommand(ctx);
-        return;
-    }
-    const text = ctx.message.text || '';
-    if (session.get(ctx.from.id) === 'ai') return ai(ctx);
-    const urls = (text.match(/https?:\/\/[\w%\-_.?&=#/]+/gi) || []).slice(0, 2);
-    if (!urls.length) return ctx.reply('URL topilmadi.');
-
-
+async function videoDownloadPlaceholder(ctx, urls) {
     for (const url of urls) {
         const p = detectPlatform(url);
         console.log('Platform:', p);
@@ -76,7 +78,7 @@ bot.on('message', async (ctx) => {
             await ctx.reply('Yuklashda xatolik. Keyinroq urinib ko‘ring.');
         }
     }
-});
+}
 
 (async function main() {
     await migrate();
